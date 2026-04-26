@@ -304,16 +304,18 @@ Fonte: AI_CONTEXT.md e GM_COMMANDS.md
 | A1 | O planner pode criar `01-BASELINE.md` como artefato recomendado de REPR-03. [ASSUMED] | Recommended Project Structure | Baixo: o nome do artefato pode mudar sem afetar a reproducao, desde que REPR-03 seja cumprido. |
 | A2 | A pesquisa deve ser considerada valida por 7 dias para ambiente local e 30 dias para constraints/roadmap se nao houver nova discuss-phase. [ASSUMED] | Metadata | Baixo: o planner pode revalidar ambiente com comandos rapidos antes de executar. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **O bug ainda reproduz exatamente no binario atual?**
    - What we know: Historico e concern registram que o player pode continuar visualmente morto apos Respawn. [VERIFIED: AI_CONTEXT.md; .planning/codebase/CONCERNS.md]
    - What's unclear: A fase ainda precisa executar o fluxo no ambiente atual e registrar o resultado visual. [VERIFIED: .planning/ROADMAP.md]
-   - Recommendation: Planejar a reproducao manual como primeira tarefa executavel da fase. [VERIFIED: .planning/ROADMAP.md]
+   - Resolution: Esta nao e uma pergunta de pesquisa pendente; e o criterio de execucao da Phase 1. Se o fluxo `@kill -> Respawn` nao puder ser executado no cliente real, a fase deve bloquear em vez de considerar REPR-02 coberto. [RESOLVED]
+   - Recommendation: Planejar a reproducao manual como tarefa executavel da fase e tratar falha de ambiente/login/cliente como bloqueio. [VERIFIED: .planning/ROADMAP.md]
 
 2. **Qual conta/personagem deve ser usado como baseline principal?**
    - What we know: README documenta `admin/123`, e AI_CONTEXT lista `admin/123` e `jonato/jonato`. [VERIFIED: README.md; AI_CONTEXT.md]
    - What's unclear: O personagem exato que o executor vai selecionar pode depender do estado atual do banco. [VERIFIED: AI_CONTEXT.md]
+   - Resolution: Usar `admin/123` como primeira tentativa por ser conta GM local documentada; se o personagem disponivel diferir, registrar exatamente a conta/personagem usados em `01-BASELINE.md`. Isso e uma decisao operacional de baseline, nao uma pergunta aberta. [RESOLVED]
    - Recommendation: Registrar conta e personagem usados no baseline; preferir conta GM local para acesso a `@kill`. [VERIFIED: README.md; GM_COMMANDS.md]
 
 ## Environment Availability

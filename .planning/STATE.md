@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: planning
+stopped_at: Roadmap criado; proximo passo e planejar Phase 1.
+last_updated: "2026-04-26T22:36:35.568Z"
+last_activity: 2026-04-26 - Roadmap v1 criado com 17 requisitos mapeados em 5 fases.
+progress:
+  total_phases: 5
+  completed_phases: 0
+  total_plans: 1
+  completed_plans: 0
+  percent: 0
+---
+
 # Project State
 
 ## Project Reference
@@ -19,6 +35,7 @@ Progress: [----------] 0%
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0
 - Average duration: N/A
 - Total execution time: 0.0 hours
@@ -30,6 +47,7 @@ Progress: [----------] 0%
 | - | - | - | - |
 
 **Recent Trend:**
+
 - Last 5 plans: N/A
 - Trend: N/A
 
@@ -69,3 +87,4 @@ Last session: 2026-04-26
 Stopped at: Roadmap criado; proximo passo e planejar Phase 1.
 Resume file: None
 
+**Planned Phase:** 01 (Reproducao e Baseline Manual) — 1 plans — 2026-04-26T22:36:35.519Z

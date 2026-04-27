@@ -16,7 +16,7 @@
 | Cliente | `korangar\target\release\korangar.exe` existe |
 | Launcher | `.\play.bat` existe |
 | Assets | `korangar\korangar\data.grf` e `korangar\korangar\rdata.grf` existem |
-| Conta/personagem | Pendente de verificacao manual; primeira tentativa recomendada: `admin` / `123` |
+| Conta/personagem | Nao informado pelo usuario no checkpoint; primeira tentativa recomendada continua `admin` / `123` |
 
 ## Comandos Executados
 
@@ -71,7 +71,7 @@ rathena-map     map       Up                     0.0.0.0:5121->5121/tcp
 
 ## Fluxo Manual
 
-Status: pendente de execucao humana no cliente real.
+Status: executado pelo usuario no cliente real em 2026-04-27.
 
 Passos planejados:
 
@@ -85,31 +85,39 @@ Passos planejados:
 
 ## Resultado Observado
 
-Pendente de checkpoint humano.
-
-Preencher apos observacao:
+Observacao humana registrada em 2026-04-27T01:51:07-03:00.
 
 | Criterio | Resultado |
 |----------|-----------|
-| Conta/personagem usados | Pendente |
-| `@kill` executado | Pendente |
-| Janela Respawn apareceu | Pendente |
-| Respawn clicado | Pendente |
-| Player visualmente vivo/em pe | Pendente |
-| Player visualmente morto/deitado | Pendente |
-| Janela Respawn fechada | Pendente |
-| HP restaurado | Pendente |
-| Movimento funcional | Pendente |
-| Bug atual reproduzido | Pendente |
+| Conta/personagem usados | Nao informado |
+| `@kill` executado | Sim, inferido pelo fluxo reportado |
+| Janela Respawn apareceu | Nao informado |
+| Respawn clicado | Sim, inferido pela resposta "Depois do Respawn" |
+| Player visualmente vivo/em pe | Nao |
+| Player visualmente morto/deitado | Sim |
+| Janela Respawn fechada | Sim |
+| HP restaurado | Nao; usuario reportou que ele ainda estava morto |
+| Movimento funcional | Nao; usuario reportou que ele ainda estava morto |
+| Bug atual reproduzido | Sim |
+
+Relato do usuario:
+
+```text
+Depois do Respawn, ficou deitado/morto? sim
+Janela Respawn ficou aberta? nao
+HP restaurou? nao (ele ainda estava morto)
+Movimento funcionou? nao (ele ainda estava morto)
+```
 
 ## Evidencias Disponiveis
 
 - Smoke de Docker/portas/arquivos registrado acima.
 - Logs de servidor mostram stack local operacional e logins recentes.
-- Evidencia visual do cliente ainda depende do checkpoint humano.
+- Evidencia visual do cliente confirmada pelo checkpoint humano: o player permanece morto/deitado apos Respawn.
+- Estado final observado: janela Respawn fecha, mas HP nao restaura e movimento nao funciona.
 
 ## Conclusao
 
 REPR-01: coberto, ambiente local necessario esta pronto para executar o fluxo de respawn.  
-REPR-02: pendente, requer observacao humana do bug no cliente real.  
-REPR-03: parcial, roteiro e ambiente registrados; resultado visual ainda pendente.
+REPR-02: coberto, bug atual reproduzido no cliente real com `@kill -> Respawn`; player ficou morto/deitado apos Respawn.  
+REPR-03: coberto, roteiro, ambiente, comando/acao de respawn e resultado visual observados foram registrados.

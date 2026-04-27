@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Este projeto estabiliza um bug especifico no workspace local Ragnarok/Korangar: depois de morrer e respawnar, o personagem volta com HP e movimento, mas continua visualmente preso na animacao de morto. O foco e investigar a causa real no fluxo Korangar + rAthena e aplicar uma correcao minima comprovada.
+Este projeto estabiliza um bug especifico no workspace local Ragnarok/Korangar: depois de morrer e respawnar, o personagem deveria voltar vivo, mas permanece em estado morto/deitado. O foco e investigar a causa real no fluxo Korangar + rAthena e aplicar uma correcao minima comprovada.
 
 O workspace atual combina o cliente Korangar em Rust, o servidor rAthena em C++, MariaDB e Docker Compose para reproduzir o loop local de login, entrada no mapa, morte e respawn.
 
@@ -14,15 +14,15 @@ Depois de `@kill -> Respawn`, o player deve voltar visualmente vivo, com janela 
 
 ### Validated
 
-- ✓ O workspace possui cliente Korangar em Rust com renderizacao, estado de entidades, UI e networking integrados - existente
-- ✓ O workspace possui servidor rAthena C++ configurado para o ambiente local Docker/MariaDB - existente
-- ✓ O cliente e o servidor usam o perfil de protocolo `PACKETVER 20220406` como ponto de compatibilidade - existente
-- ✓ O bug de respawn esta documentado com reproducao basica em `AI_CONTEXT.md` e `.planning/codebase/CONCERNS.md` - existente
-- ✓ Ja existem tentativas anteriores em `NetworkEvent::ResurrectPlayer` e `NetworkEvent::ChangeMap`, mas elas nao resolveram o problema - existente
+- [x] O workspace possui cliente Korangar em Rust com renderizacao, estado de entidades, UI e networking integrados - existente
+- [x] O workspace possui servidor rAthena C++ configurado para o ambiente local Docker/MariaDB - existente
+- [x] O cliente e o servidor usam o perfil de protocolo `PACKETVER 20220406` como ponto de compatibilidade - existente
+- [x] O bug de respawn esta documentado com reproducao basica em `AI_CONTEXT.md` e `.planning/codebase/CONCERNS.md` - existente
+- [x] Ja existem tentativas anteriores em `NetworkEvent::ResurrectPlayer` e `NetworkEvent::ChangeMap`, mas elas nao resolveram o problema - existente
+- [x] Reproducao atual confirmada em Phase 1: apos `@kill -> Respawn`, o player permanece morto/deitado; a janela Respawn fecha, mas HP nao restaura e movimento nao funciona - Phase 1
 
 ### Active
 
-- [ ] Reproduzir o bug atual com o cliente e servidor locais
 - [ ] Registrar evidencias suficientes para diferenciar entre pacote ausente, entidade errada e estado de animacao sobrescrito
 - [ ] Identificar se a causa principal esta no cliente Korangar, no fluxo rAthena de respawn, ou na integracao entre os dois
 - [ ] Aplicar a menor correcao segura para o fluxo confirmado
@@ -44,12 +44,20 @@ O mapa do codigo identifica este repositorio como um workspace brownfield com tr
 - Servidor rAthena em C++, com fluxo de respawn relevante em `rathena-master/src/map/pc.cpp` e envio de pacotes em `rathena-master/src/map/clif.cpp`
 - Infra local com `docker-compose.yml`, `docker/entrypoint.sh`, MariaDB 11 e scripts/configs importados em `docker/import/`
 
-O bug conhecido: ao morrer com `@kill` ou PvP e respawnar pelo botao Respawn ou por `@alive`, o personagem pode se mover e recuperar HP, mas permanece renderizado deitado/morto. A janela de respawn tambem pode continuar aberta.
+Baseline confirmado na Phase 1:
+
+- Ambiente local pronto: Docker/rAthena/MariaDB, portas locais, `play.bat`, executavel Korangar e GRFs.
+- Fluxo observado: `@kill -> Respawn` no cliente real.
+- Resultado final: player permanece morto/deitado.
+- Janela Respawn fecha.
+- HP nao restaura.
+- Movimento nao funciona.
+- Conta/personagem nao foram informados no checkpoint.
 
 Hipoteses ja registradas:
 
 - O codigo pode estar resetando `entities().first_mut()`, mas o player real pode precisar ser localizado por `this_entity()`
-- `set_idle()` pode nao desfazer completamente o estado interno de morte/animação
+- `set_idle()` pode nao desfazer completamente o estado interno de morte/animacao
 - Um pacote posterior de status/HP pode chamar `set_dead()` depois do respawn
 - O rAthena pode nao enviar `ZC_RESURRECTION` no respawn por save point, representando o retorno apenas como mudanca de mapa/posicao
 - A janela de respawn pode estar sendo reaberta por outro handler de status apos `ChangeMap`
@@ -66,26 +74,27 @@ Hipoteses ja registradas:
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Investigar antes de corrigir | Tentativas anteriores em `ResurrectPlayer` e `ChangeMap` nao resolveram; precisamos provar a causa | - Pending |
-| v1 sera correcao minima comprovada | O usuario escolheu resolver o bug com verificacao manual, sem expandir para instrumentacao permanente ou suite E2E | - Pending |
-| Manter cliente e servidor como candidatos ate haver evidencia | O fluxo pode falhar por pacote ausente, entidade incorreta ou state machine de animacao | - Pending |
+| Investigar antes de corrigir | Tentativas anteriores em `ResurrectPlayer` e `ChangeMap` nao resolveram; precisamos provar a causa | Pending |
+| v1 sera correcao minima comprovada | O usuario escolheu resolver o bug com verificacao manual, sem expandir para instrumentacao permanente ou suite E2E | Pending |
+| Manter cliente e servidor como candidatos ate haver evidencia | O fluxo pode falhar por pacote ausente, entidade incorreta ou state machine de animacao | Pending |
+| Baseline atual confirmado | Phase 1 reproduziu o bug no cliente real; o estado final ficou morto/deitado, sem HP e sem movimento | Pending |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-**After each phase transition** (via `$gsd-transition`):
+**After each phase transition**:
 1. Requirements invalidated? -> Move to Out of Scope with reason
 2. Requirements validated? -> Move to Validated with phase reference
 3. New requirements emerged? -> Add to Active
 4. Decisions to log? -> Add to Key Decisions
 5. "What This Is" still accurate? -> Update if drifted
 
-**After each milestone** (via `$gsd-complete-milestone`):
+**After each milestone**:
 1. Full review of all sections
 2. Core Value check -> still the right priority?
 3. Audit Out of Scope -> reasons still valid?
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-26 after initialization*
+*Last updated: 2026-04-27 after Phase 1 execution*

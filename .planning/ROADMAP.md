@@ -12,7 +12,7 @@ Este roadmap entrega uma correcao minima comprovada para o bug de respawn visual
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Reproducao e Baseline Manual** - Ambiente local e bug atual confirmados antes de qualquer mudanca permanente.
+- [x] **Phase 1: Reproducao e Baseline Manual** - Ambiente local e bug atual confirmados antes de qualquer mudanca permanente. (Completed 2026-04-27)
 - [ ] **Phase 2: Evidencia de Pacotes, Eventos e Entidade** - Fluxo real de respawn capturado e causa provavel classificada.
 - [ ] **Phase 3: Fix Minimo no Ponto Causal** - Menor correcao segura aplicada ao cliente, servidor ou integracao conforme evidencia.
 - [ ] **Phase 4: Verificacao Manual Direcionada** - Fluxo corrigido validado manualmente com estado visual vivo, movimento, HP e janela fechada.
@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. O ambiente local necessario para Korangar, rAthena, Docker e MariaDB inicia o suficiente para executar o fluxo de respawn.
   2. O bug atual e reproduzido com `@kill -> Respawn` antes de qualquer fix permanente.
   3. Um roteiro de reproducao registra passos, ambiente, comando usado e resultado visual observado.
-**Plans**: TBD
+**Plans**: 1/1 complete
 
 ### Phase 2: Evidencia de Pacotes, Eventos e Entidade
 **Goal**: A causa provavel do bug fica apoiada por evidencia objetiva do fluxo de pacotes, eventos, entidade local e estado visual final.
@@ -82,9 +82,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Reproducao e Baseline Manual | 0/TBD | Not started | - |
+| 1. Reproducao e Baseline Manual | 1/1 | Complete | 2026-04-27 |
 | 2. Evidencia de Pacotes, Eventos e Entidade | 0/TBD | Not started | - |
 | 3. Fix Minimo no Ponto Causal | 0/TBD | Not started | - |
 | 4. Verificacao Manual Direcionada | 0/TBD | Not started | - |
 | 5. Limpeza e Registro Final | 0/TBD | Not started | - |
-

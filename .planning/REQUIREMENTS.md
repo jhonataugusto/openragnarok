@@ -9,9 +9,9 @@ Requirements for the initial fix milestone. Each maps to exactly one roadmap pha
 
 ### Reproducao
 
-- [ ] **REPR-01**: O desenvolvedor consegue iniciar o ambiente local necessario para reproduzir o fluxo de respawn com Korangar e rAthena.
-- [ ] **REPR-02**: O desenvolvedor consegue reproduzir o bug atual usando o fluxo `@kill -> Respawn` antes de alterar comportamento permanente.
-- [ ] **REPR-03**: O roteiro de reproducao registra passos, ambiente, comando usado e resultado visual observado.
+- [x] **REPR-01**: O desenvolvedor consegue iniciar o ambiente local necessario para reproduzir o fluxo de respawn com Korangar e rAthena.
+- [x] **REPR-02**: O desenvolvedor consegue reproduzir o bug atual usando o fluxo `@kill -> Respawn` antes de alterar comportamento permanente.
+- [x] **REPR-03**: O roteiro de reproducao registra passos, ambiente, comando usado e resultado visual observado.
 
 ### Evidencia
 
@@ -73,9 +73,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REPR-01 | Phase 1 | Pending |
-| REPR-02 | Phase 1 | Pending |
-| REPR-03 | Phase 1 | Pending |
+| REPR-01 | Phase 1 | Complete |
+| REPR-02 | Phase 1 | Complete |
+| REPR-03 | Phase 1 | Complete |
 | EVID-01 | Phase 2 | Pending |
 | EVID-02 | Phase 2 | Pending |
 | EVID-03 | Phase 2 | Pending |
@@ -98,4 +98,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-04-26*
-*Last updated: 2026-04-26 after roadmap creation*
+*Last updated: 2026-04-27 after Phase 1 execution*

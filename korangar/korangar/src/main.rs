@@ -72,8 +72,8 @@ use networking::{PacketHistory, PacketHistoryCallback};
 #[cfg(not(feature = "debug"))]
 use ragnarok_packets::handler::NoPacketCallback;
 use ragnarok_packets::{
-    AttackRange, BuyShopItemsResult, CharacterServerInformation, Direction, DisappearanceReason, EntityId, HotbarSlot, SellItemsResult,
-    SkillId, SkillLevel, SkillType, TilePosition, UnitId, WorldPosition,
+    AttackRange, BuyShopItemsResult, CharacterServerInformation, ClientTick, Direction, DisappearanceReason, EntityId, HotbarSlot,
+    SellItemsResult, SkillId, SkillLevel, SkillType, TilePosition, UnitId, WorldPosition,
 };
 use renderer::InterfaceRenderer;
 use rust_state::{ManuallyAssertExt, State};
@@ -105,7 +105,7 @@ use winit::keyboard::PhysicalKey;
 use winit::window::{Icon, Window, WindowId};
 
 use crate::graphics::*;
-use crate::input::{InputEvent, InputSystem};
+use crate::input::{InputEvent, InputSystem, tile_offset_for_camera_movement};
 use crate::interface::cursor::{MouseCursor, MouseCursorState};
 use crate::interface::resource::{ItemSource, SkillSource};
 use crate::interface::windows::*;
@@ -132,6 +132,8 @@ const DEFAULT_BACKGROUND_MUSIC: Option<&str> = Some("bgm\\01.mp3");
 const MAIN_MENU_CLICK_SOUND_EFFECT: &str = "버튼소리.wav";
 const CINEMATIC_DIALOG_TEXT_SOUND_EFFECT: &str = MAIN_MENU_CLICK_SOUND_EFFECT;
 const ITEM_PICKUP_RANGE: AttackRange = AttackRange(1);
+const THIRD_PERSON_MOVEMENT_TILE_DISTANCE: i16 = 5;
+const THIRD_PERSON_MOVEMENT_THROTTLE_MS: u32 = 500;
 // TODO: The number of point lights that can cast shadows should be configurable
 // through the graphics settings. For now I just chose an arbitrary smaller
 // number that should be playable on most devices.
@@ -290,6 +292,8 @@ struct Client {
     debug_camera: DebugCamera,
     start_camera: StartCamera,
     player_camera: PlayerCamera,
+    third_person_camera: ThirdPersonCamera,
+    third_person_movement: ThirdPersonMovementState,
     cinematic_camera: CinematicCamera,
     cinematic_camera_active: bool,
     directional_shadow_camera: DirectionalShadowCamera,
@@ -349,6 +353,51 @@ struct Client {
     client_state: State<ClientState>,
 }
 
+#[derive(Default)]
+struct ThirdPersonMovementState {
+    last_sent_at: Option<ClientTick>,
+    last_destination: Option<TilePosition>,
+    was_moving: bool,
+}
+
+impl ThirdPersonMovementState {
+    fn should_send(&mut self, moving: bool, destination: Option<TilePosition>, client_tick: ClientTick) -> bool {
+        if !moving {
+            self.was_moving = false;
+            self.last_sent_at = None;
+            self.last_destination = None;
+            return false;
+        }
+
+        let Some(destination) = destination else {
+            self.was_moving = true;
+            return false;
+        };
+
+        let should_send = !self.was_moving
+            || self
+                .last_sent_at
+                .map(|last_sent_at| client_tick.0.wrapping_sub(last_sent_at.0) >= THIRD_PERSON_MOVEMENT_THROTTLE_MS)
+                .unwrap_or(true)
+                && self.last_destination != Some(destination);
+
+        self.was_moving = true;
+
+        if should_send {
+            self.last_sent_at = Some(client_tick);
+            self.last_destination = Some(destination);
+        }
+
+        should_send
+    }
+
+    fn reset(&mut self) {
+        self.was_moving = false;
+        self.last_sent_at = None;
+        self.last_destination = None;
+    }
+}
+
 impl Client {
     fn can_use_cinematic_dialog(&self, npc_id: EntityId) -> bool {
         if !*self
@@ -378,6 +427,40 @@ impl Client {
         let npc = entities.iter().find(|entity| entity.get_entity_id() == npc_id)?;
 
         Some((player.get_position(), npc.get_position(), player.get_direction()))
+    }
+
+    fn third_person_movement_enabled(&self) -> bool {
+        *self
+            .client_state
+            .follow(client_state().interface_settings().third_person_movement_enabled())
+            && self.client_state.try_follow(this_entity()).is_some()
+    }
+
+    fn queue_third_person_movement(&mut self, client_tick: ClientTick) {
+        let movement_keys = self.input_system.movement_key_state();
+        let moving = movement_keys.has_movement();
+        let destination = moving
+            .then(|| {
+                let player_position = self.client_state.try_follow(this_entity())?.get_tile_position();
+                let (offset_x, offset_y) = tile_offset_for_camera_movement(
+                    movement_keys,
+                    self.third_person_camera.view_direction(),
+                    THIRD_PERSON_MOVEMENT_TILE_DISTANCE,
+                )?;
+                let destination = TilePosition {
+                    x: player_position.x.checked_add_signed(offset_x)?,
+                    y: player_position.y.checked_add_signed(offset_y)?,
+                };
+
+                self.map.as_ref().filter(|map| map.is_walkable(destination)).map(|_| destination)
+            })
+            .flatten();
+
+        if self.third_person_movement.should_send(moving, destination, client_tick)
+            && let Some(destination) = destination
+        {
+            self.input_event_buffer.push(InputEvent::PlayerMove { destination });
+        }
     }
 
     fn should_continue_cinematic_dialog(&self, npc_id: EntityId) -> bool {
@@ -624,6 +707,8 @@ impl Client {
             let debug_camera = DebugCamera::new();
             let mut start_camera = StartCamera::new();
             let player_camera = PlayerCamera::new();
+            let third_person_camera = ThirdPersonCamera::new();
+            let third_person_movement = ThirdPersonMovementState::default();
             let cinematic_camera = CinematicCamera::new();
             let cinematic_camera_active = false;
             let mut directional_shadow_camera = DirectionalShadowCamera::new();
@@ -772,6 +857,8 @@ impl Client {
             debug_camera,
             start_camera,
             player_camera,
+            third_person_camera,
+            third_person_movement,
             cinematic_camera,
             cinematic_camera_active,
             directional_shadow_camera,
@@ -2098,6 +2185,7 @@ impl Client {
         self.interface.process_events(&mut self.input_event_buffer);
         let interface_has_focus = self.interface.has_focus();
         let cinematic_dialog_active = self.is_cinematic_dialog_active();
+        let third_person_movement_enabled = self.third_person_movement_enabled();
         let cinematic_keyboard_advance_pressed =
             cinematic_dialog_active && (input_report.characters.contains(&'\x0d') || input_report.characters.contains(&' '));
 
@@ -2106,9 +2194,16 @@ impl Client {
         }
 
         if !cinematic_dialog_active && self.interface.get_mouse_mode().is_rotating_camera() {
-            // TODO: Does this really need to be a InputEvent?
-            let rotation = input_report.mouse_delta.width;
-            self.input_event_buffer.push(InputEvent::RotateCamera { rotation });
+            if third_person_movement_enabled {
+                self.input_event_buffer.push(InputEvent::RotateThirdPersonCamera {
+                    yaw: input_report.mouse_delta.width,
+                    pitch: input_report.mouse_delta.height,
+                });
+            } else {
+                // TODO: Does this really need to be a InputEvent?
+                let rotation = input_report.mouse_delta.width;
+                self.input_event_buffer.push(InputEvent::RotateCamera { rotation });
+            }
         }
 
         if !cinematic_dialog_active && !interface_has_focus {
@@ -2119,6 +2214,14 @@ impl Client {
                 #[cfg(feature = "debug")]
                 *self.client_state.follow(client_state().render_options().use_debug_camera()),
             );
+
+            if third_person_movement_enabled {
+                self.queue_third_person_movement(client_tick);
+            } else {
+                self.third_person_movement.reset();
+            }
+        } else {
+            self.third_person_movement.reset();
         }
 
         let input_events: Vec<_> = self.input_event_buffer.drain(..).collect();
@@ -2196,12 +2299,21 @@ impl Client {
                 InputEvent::Exit => event_loop.exit(),
                 InputEvent::ZoomCamera { zoom_factor } => {
                     if !cinematic_dialog_active {
-                        self.player_camera.soft_zoom(zoom_factor);
+                        if third_person_movement_enabled {
+                            self.third_person_camera.soft_zoom(zoom_factor);
+                        } else {
+                            self.player_camera.soft_zoom(zoom_factor);
+                        }
                     }
                 }
                 InputEvent::RotateCamera { rotation } => {
                     if !cinematic_dialog_active {
                         self.player_camera.soft_rotate(rotation);
+                    }
+                }
+                InputEvent::RotateThirdPersonCamera { yaw, pitch } => {
+                    if !cinematic_dialog_active && third_person_movement_enabled {
+                        self.third_person_camera.look_around(yaw, pitch);
                     }
                 }
                 InputEvent::ResetCameraRotation => {
@@ -2884,6 +2996,7 @@ impl Client {
 
                                 player.set_position(map, position, client_tick);
                                 self.player_camera.set_focus_point(player.get_position());
+                                self.third_person_camera.set_focus_point(player.get_position());
                             }
 
                             self.directional_shadow_camera.set_level_bound(map.get_level_bound());
@@ -2977,6 +3090,8 @@ impl Client {
             if self.client_state.try_follow(this_entity()).is_some() {
                 self.player_camera.update(delta_time);
                 self.player_camera.generate_view_projection(window_size);
+                self.third_person_camera.update(delta_time);
+                self.third_person_camera.generate_view_projection(window_size);
             } else {
                 self.start_camera.update(delta_time);
                 self.start_camera.generate_view_projection(window_size);
@@ -2994,6 +3109,9 @@ impl Client {
             }
 
             let currently_playing = self.client_state.try_follow(this_player()).is_some();
+            let use_third_person_camera = third_person_movement_enabled;
+            #[cfg(feature = "debug")]
+            let use_third_person_camera = use_third_person_camera && !render_options.use_debug_camera;
             let cinematic_dialog_targets = self.cinematic_dialog_targets();
             let use_cinematic_camera = *self
                 .client_state
@@ -3009,12 +3127,14 @@ impl Client {
                     #[cfg(feature = "debug")]
                     let source_camera: &(dyn Camera + Send + Sync) = match currently_playing {
                         _ if render_options.use_debug_camera => &self.debug_camera,
+                        _ if use_third_person_camera => &self.third_person_camera,
                         true => &self.player_camera,
                         false => &self.start_camera,
                     };
 
                     #[cfg(not(feature = "debug"))]
                     let source_camera: &(dyn Camera + Send + Sync) = match currently_playing {
+                        _ if use_third_person_camera => &self.third_person_camera,
                         true => &self.player_camera,
                         false => &self.start_camera,
                     };
@@ -3042,6 +3162,7 @@ impl Client {
                     _ if use_cinematic_camera => &self.cinematic_camera,
                     #[cfg(feature = "debug")]
                     _ if render_options.use_debug_camera => &self.debug_camera,
+                    _ if use_third_person_camera => &self.third_person_camera,
                     true => &self.player_camera,
                     false => &self.start_camera,
                 };
@@ -3130,12 +3251,14 @@ impl Client {
                 // is not `None`.
                 let position = self.client_state.follow(this_entity().manually_asserted()).get_position();
                 self.player_camera.set_smoothed_focus_point(position);
+                self.third_person_camera.set_smoothed_focus_point(position);
             }
 
             let current_camera: &(dyn Camera + Send + Sync) = match currently_playing {
                 _ if use_cinematic_camera => &self.cinematic_camera,
                 #[cfg(feature = "debug")]
                 _ if render_options.use_debug_camera => &self.debug_camera,
+                _ if use_third_person_camera => &self.third_person_camera,
                 true => &self.player_camera,
                 false => &self.start_camera,
             };
@@ -3460,6 +3583,7 @@ impl Client {
                 if render_options.show_bounding_boxes {
                     let culling_camera: &dyn Camera = match currently_playing {
                         _ if use_cinematic_camera => &self.cinematic_camera,
+                        _ if use_third_person_camera => &self.third_person_camera,
                         true => &self.player_camera,
                         false => &self.start_camera,
                     };
@@ -3632,11 +3756,13 @@ impl Client {
                                             }
                                         }
                                         PickerTarget::Tile { x, y } => {
-                                            let destination = TilePosition { x, y };
+                                            if !third_person_movement_enabled {
+                                                let destination = TilePosition { x, y };
 
-                                            interface_frame.set_mouse_mode(MouseInputMode::Walk { destination });
+                                                interface_frame.set_mouse_mode(MouseInputMode::Walk { destination });
 
-                                            self.input_event_buffer.push(InputEvent::PlayerMove { destination });
+                                                self.input_event_buffer.push(InputEvent::PlayerMove { destination });
+                                            }
                                         }
                                         #[cfg(feature = "debug")]
                                         PickerTarget::Marker(marker_identifier) => {
@@ -3655,6 +3781,7 @@ impl Client {
                             }
                         }
                     } else if !cinematic_dialog_active
+                        && !third_person_movement_enabled
                         && let Some(last_destination) = last_walking_destination
                         && let PickerTarget::Tile { x, y } = input_report.mouse_target
                         && input_report.left_mouse_button_down
@@ -3715,6 +3842,7 @@ impl Client {
                     PickerTarget::Tile { x, y } => {
                         // Only show if the mouse mode is default or walking.
                         if currently_playing
+                            && !third_person_movement_enabled
                             && !interface_frame.is_interface_hovered()
                             && (is_mouse_mode_default || last_walking_destination.is_some())
                         {

@@ -53,6 +53,13 @@ pub enum InputEvent {
         /// Amount of rotation.
         rotation: f32,
     },
+    /// Rotate the third-person camera.
+    RotateThirdPersonCamera {
+        /// Horizontal camera rotation.
+        yaw: f32,
+        /// Vertical camera rotation.
+        pitch: f32,
+    },
     /// Reset the player camera rotation.
     ResetCameraRotation,
     /// Open or close the menu window. Only works while playing.

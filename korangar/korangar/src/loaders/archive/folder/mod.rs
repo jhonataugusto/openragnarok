@@ -2,8 +2,8 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Error, Read};
-use std::time::UNIX_EPOCH;
 use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
 
 use blake3::Hasher;
 use flate2::bufread::{GzDecoder, GzEncoder};

@@ -6,6 +6,7 @@ use std::mem::variant_count;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use cgmath::{InnerSpace, Vector2, Vector3};
 use ragnarok_packets::{ClientTick, HotbarSlot};
 use winit::dpi::PhysicalPosition;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta};
@@ -31,6 +32,62 @@ const HOTBAR_NUMBER_KEYS: [KeyCode; 10] = [
     KeyCode::Digit9,
     KeyCode::Digit0,
 ];
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MovementKeyState {
+    pub forward: bool,
+    pub backward: bool,
+    pub left: bool,
+    pub right: bool,
+}
+
+impl MovementKeyState {
+    pub fn has_movement(self) -> bool {
+        self.forward || self.backward || self.left || self.right
+    }
+}
+
+pub fn tile_offset_for_camera_movement(
+    keys: MovementKeyState,
+    camera_view_direction: Vector3<f32>,
+    tile_distance: i16,
+) -> Option<(i16, i16)> {
+    let forward = Vector2::new(camera_view_direction.x, camera_view_direction.z);
+
+    if !keys.has_movement() || forward.magnitude2() <= f32::EPSILON {
+        return None;
+    }
+
+    let forward = forward.normalize();
+    let right = Vector2::new(forward.y, -forward.x);
+    let mut movement = Vector2::new(0.0, 0.0);
+
+    if keys.forward {
+        movement += forward;
+    }
+
+    if keys.backward {
+        movement -= forward;
+    }
+
+    if keys.right {
+        movement += right;
+    }
+
+    if keys.left {
+        movement -= right;
+    }
+
+    if movement.magnitude2() <= f32::EPSILON {
+        return None;
+    }
+
+    let movement = movement.normalize() * tile_distance as f32;
+    let offset_x = movement.x.round() as i16;
+    let offset_y = movement.y.round() as i16;
+
+    (offset_x != 0 || offset_y != 0).then_some((offset_x, offset_y))
+}
 
 pub(crate) fn hotbar_slot_for_number_key(key_code: KeyCode) -> Option<HotbarSlot> {
     HOTBAR_NUMBER_KEYS
@@ -215,6 +272,22 @@ impl InputSystem {
         &self.keys[key_code as usize]
     }
 
+    pub fn movement_key_state(&self) -> MovementKeyState {
+        let alt_down = self.get_key(KeyCode::AltLeft).down() || self.get_key(KeyCode::AltRight).down();
+        let control_down = self.get_key(KeyCode::ControlLeft).down() || self.get_key(KeyCode::ControlRight).down();
+
+        if alt_down || control_down {
+            return MovementKeyState::default();
+        }
+
+        MovementKeyState {
+            forward: self.get_key(KeyCode::KeyW).down(),
+            backward: self.get_key(KeyCode::KeyS).down(),
+            left: self.get_key(KeyCode::KeyA).down(),
+            right: self.get_key(KeyCode::KeyD).down(),
+        }
+    }
+
     #[cfg_attr(feature = "debug", korangar_debug::profile)]
     pub fn handle_keyboard_input(
         &mut self,
@@ -358,10 +431,11 @@ impl InputSystem {
 
 #[cfg(test)]
 mod tests {
+    use cgmath::Vector3;
     use ragnarok_packets::HotbarSlot;
     use winit::keyboard::KeyCode;
 
-    use super::hotbar_slot_for_number_key;
+    use super::{MovementKeyState, hotbar_slot_for_number_key, tile_offset_for_camera_movement};
 
     #[test]
     fn number_row_keys_map_to_hotbar_slots() {
@@ -386,5 +460,32 @@ mod tests {
     #[test]
     fn non_number_row_keys_do_not_map_to_hotbar_slots() {
         assert_eq!(hotbar_slot_for_number_key(KeyCode::KeyJ), None);
+    }
+
+    #[test]
+    fn movement_offset_uses_camera_forward_direction() {
+        let keys = MovementKeyState {
+            forward: true,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            tile_offset_for_camera_movement(keys, Vector3::new(0.0, -0.5, 1.0), 5),
+            Some((0, 5))
+        );
+    }
+
+    #[test]
+    fn movement_offset_normalizes_diagonal_input() {
+        let keys = MovementKeyState {
+            forward: true,
+            left: true,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            tile_offset_for_camera_movement(keys, Vector3::new(0.0, -0.5, 1.0), 5),
+            Some((-4, 4))
+        );
     }
 }

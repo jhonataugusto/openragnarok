@@ -6,6 +6,7 @@ mod player;
 mod point_shadow;
 pub mod smoothed;
 mod start;
+mod third_person;
 
 use std::f32::consts::FRAC_PI_2;
 
@@ -19,6 +20,7 @@ pub use self::player::PlayerCamera;
 pub use self::point_shadow::PointShadowCamera;
 pub use self::smoothed::SmoothedValue;
 pub use self::start::StartCamera;
+pub use self::third_person::ThirdPersonCamera;
 #[cfg(feature = "debug")]
 use crate::graphics::{ScreenPosition, ScreenSize};
 

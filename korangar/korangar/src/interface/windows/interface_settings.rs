@@ -110,6 +110,11 @@ where
                 state: self.settings_path.npc_cinematic_text_sound_enabled(),
                 event: Toggle(self.settings_path.npc_cinematic_text_sound_enabled()),
             },
+            state_button! {
+                text: "Third-person WASD movement",
+                state: self.settings_path.third_person_movement_enabled(),
+                event: Toggle(self.settings_path.third_person_movement_enabled()),
+            },
         );
 
         window! {

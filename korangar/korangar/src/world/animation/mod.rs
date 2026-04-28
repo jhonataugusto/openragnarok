@@ -68,6 +68,20 @@ impl AnimationActionType {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn attack_duration_is_never_zero() {
+        let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
+
+        animation_state.attack(EntityType::Player, 0, false, ClientTick(10));
+
+        assert_eq!(animation_state.duration, Some(1));
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct AnimationState {
     action_type: AnimationActionType,
@@ -109,7 +123,7 @@ impl AnimationState {
         };
         self.action_base_offset = self.action_type.action_base_offset(entity_type);
         self.start_time = client_tick;
-        self.duration = Some(attack_duration);
+        self.duration = Some(attack_duration.max(1));
         self.factor = None;
         self.looping = false;
     }

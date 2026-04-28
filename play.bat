@@ -1,6 +1,6 @@
 @echo off
 REM Launcher para o cliente Korangar.
-REM Precisa rodar a partir de korangar\korangar para encontrar data.grf / rdata.grf.
+REM Precisa rodar a partir de korangar\korangar para encontrar os assets.
 
 setlocal
 set "ROOT=%~dp0"
@@ -14,9 +14,9 @@ if not exist "%EXE%" (
     exit /b 1
 )
 
-if not exist "%CWD%\data.grf" (
-    echo [erro] data.grf nao encontrado em "%CWD%"
-    echo Coloque data.grf e rdata.grf nessa pasta antes de rodar.
+if not exist "%CWD%\data.grf" if not exist "%CWD%\archive\data" (
+    echo [erro] assets nao encontrados em "%CWD%"
+    echo Coloque data.grf/rdata.grf nessa pasta ou extraia a GRF em archive\data.
     pause
     exit /b 1
 )

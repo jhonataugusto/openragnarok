@@ -19,8 +19,7 @@ impl Timer {
 
     pub fn new_dynamic(name: String) -> Self {
         if stack_size() == 0 {
-            let timestamp = chrono::offset::Local::now().time().format("%H:%M:%S").to_string();
-            print_debug_prefix!("[{}] {}", timestamp.red(), name);
+            print_debug_prefix!("{}", name);
         } else {
             print_debug_prefix!("{}", name);
         }

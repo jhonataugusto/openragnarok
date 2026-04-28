@@ -147,6 +147,13 @@ const FALLBACK_PACKET_VERSION: SupportedPacketVersion = SupportedPacketVersion::
 
 static ICON_DATA: &[u8] = include_bytes!("../archive/data/icon.png");
 
+#[derive(Clone, Copy)]
+struct PendingSkillCast {
+    skill_id: SkillId,
+    skill_level: SkillLevel,
+    skill_type: SkillType,
+}
+
 /// CTR+C was sent, and the client is supposed to close.
 pub static SHUTDOWN_SIGNAL: LazyLock<AtomicBool> = LazyLock::new(|| AtomicBool::new(false));
 
@@ -291,6 +298,7 @@ struct Client {
 
     input_event_buffer: Vec<InputEvent>,
     network_event_buffer: NetworkEventBuffer,
+    pending_skill_cast: Option<PendingSkillCast>,
     // TODO: Move or remove this.
     saved_login_data: Option<LoginServerLoginData>,
     // TODO: Move or remove this.
@@ -771,6 +779,7 @@ impl Client {
             point_shadow_camera,
             input_event_buffer,
             network_event_buffer,
+            pending_skill_cast: None,
             saved_login_data,
             saved_character_server,
             saved_login_server_address,
@@ -1493,6 +1502,31 @@ impl Client {
 
                     if let Some(entity) = entity {
                         entity.set_details(name);
+                    }
+                }
+                NetworkEvent::SkillUseEffect {
+                    source_entity_id,
+                    destination_entity_id,
+                    attack_duration,
+                } => {
+                    let target_position = self
+                        .client_state
+                        .follow(client_state().entities())
+                        .iter()
+                        .find(|entity| entity.get_entity_id() == destination_entity_id)
+                        .map(|entity| entity.get_tile_position());
+
+                    if let Some(entity) = self
+                        .client_state
+                        .follow_mut(client_state().entities())
+                        .iter_mut()
+                        .find(|entity| entity.get_entity_id() == source_entity_id)
+                    {
+                        if let Some(target_position) = target_position {
+                            entity.rotate_towards(target_position);
+                        }
+
+                        entity.set_attack(attack_duration, false, client_tick);
                     }
                 }
                 NetworkEvent::DamageEffect {
@@ -2472,23 +2506,12 @@ impl Client {
                     {
                         match learned_skill.skill_type {
                             SkillType::Passive => {}
-                            SkillType::Attack => {
-                                if let PickerTarget::Entity(entity_id) = input_report.mouse_target {
-                                    let _ = self.networking_system.cast_skill(
-                                        learnable_skill.skill_id,
-                                        learnable_skill.maximum_level,
-                                        entity_id,
-                                    );
-                                }
-                            }
-                            SkillType::Ground | SkillType::Trap => {
-                                if let PickerTarget::Tile { x, y } = input_report.mouse_target {
-                                    let _ = self.networking_system.cast_ground_skill(
-                                        learnable_skill.skill_id,
-                                        learnable_skill.maximum_level,
-                                        TilePosition { x, y },
-                                    );
-                                }
+                            SkillType::Attack | SkillType::Ground | SkillType::Support | SkillType::Trap => {
+                                self.pending_skill_cast = Some(PendingSkillCast {
+                                    skill_id: learnable_skill.skill_id,
+                                    skill_level: learnable_skill.maximum_level,
+                                    skill_type: learned_skill.skill_type,
+                                });
                             }
                             SkillType::SelfCast => match learnable_skill.skill_id == ROLLING_CUTTER_ID {
                                 true => {
@@ -2506,21 +2529,6 @@ impl Client {
                                     );
                                 }
                             },
-                            SkillType::Support => {
-                                if let PickerTarget::Entity(entity_id) = input_report.mouse_target {
-                                    let _ = self.networking_system.cast_skill(
-                                        learnable_skill.skill_id,
-                                        learnable_skill.maximum_level,
-                                        entity_id,
-                                    );
-                                } else {
-                                    let _ = self.networking_system.cast_skill(
-                                        learnable_skill.skill_id,
-                                        learnable_skill.maximum_level,
-                                        self.client_state.follow(this_entity().manually_asserted()).get_entity_id(),
-                                    );
-                                }
-                            }
                         }
                     }
                 }
@@ -3578,36 +3586,69 @@ impl Client {
                             interface_frame.unfocus();
 
                             if mouse_button == MouseButton::Left {
-                                match input_report.mouse_target {
-                                    PickerTarget::Nothing => {}
-                                    PickerTarget::Entity(entity_id) => {
-                                        let is_ground_item = self
-                                            .client_state
-                                            .follow(client_state().ground_items())
-                                            .iter()
-                                            .any(|item| item.get_entity_id() == entity_id);
-
-                                        if is_ground_item {
-                                            self.input_event_buffer.push(InputEvent::PickUpItem { entity_id })
-                                        } else {
-                                            self.input_event_buffer.push(InputEvent::PlayerInteract { entity_id })
+                                if let Some(pending_skill_cast) = self.pending_skill_cast.take() {
+                                    match pending_skill_cast.skill_type {
+                                        SkillType::Attack | SkillType::Support => {
+                                            if let PickerTarget::Entity(entity_id) = input_report.mouse_target {
+                                                let _ = self.networking_system.cast_skill(
+                                                    pending_skill_cast.skill_id,
+                                                    pending_skill_cast.skill_level,
+                                                    entity_id,
+                                                );
+                                            }
                                         }
+                                        SkillType::Ground | SkillType::Trap => {
+                                            if let PickerTarget::Tile { x, y } = input_report.mouse_target {
+                                                let _ = self.networking_system.cast_ground_skill(
+                                                    pending_skill_cast.skill_id,
+                                                    pending_skill_cast.skill_level,
+                                                    TilePosition { x, y },
+                                                );
+                                            }
+                                        }
+                                        SkillType::SelfCast => {
+                                            let _ = self.networking_system.cast_skill(
+                                                pending_skill_cast.skill_id,
+                                                pending_skill_cast.skill_level,
+                                                self.client_state.follow(this_entity().manually_asserted()).get_entity_id(),
+                                            );
+                                        }
+                                        SkillType::Passive => {}
                                     }
-                                    PickerTarget::Tile { x, y } => {
-                                        let destination = TilePosition { x, y };
+                                } else {
+                                    match input_report.mouse_target {
+                                        PickerTarget::Nothing => {}
+                                        PickerTarget::Entity(entity_id) => {
+                                            let is_ground_item = self
+                                                .client_state
+                                                .follow(client_state().ground_items())
+                                                .iter()
+                                                .any(|item| item.get_entity_id() == entity_id);
 
-                                        interface_frame.set_mouse_mode(MouseInputMode::Walk { destination });
+                                            if is_ground_item {
+                                                self.input_event_buffer.push(InputEvent::PickUpItem { entity_id })
+                                            } else {
+                                                self.input_event_buffer.push(InputEvent::PlayerInteract { entity_id })
+                                            }
+                                        }
+                                        PickerTarget::Tile { x, y } => {
+                                            let destination = TilePosition { x, y };
 
-                                        self.input_event_buffer.push(InputEvent::PlayerMove { destination });
-                                    }
-                                    #[cfg(feature = "debug")]
-                                    PickerTarget::Marker(marker_identifier) => {
-                                        self.input_event_buffer.push(InputEvent::OpenMarkerDetails { marker_identifier })
+                                            interface_frame.set_mouse_mode(MouseInputMode::Walk { destination });
+
+                                            self.input_event_buffer.push(InputEvent::PlayerMove { destination });
+                                        }
+                                        #[cfg(feature = "debug")]
+                                        PickerTarget::Marker(marker_identifier) => {
+                                            self.input_event_buffer.push(InputEvent::OpenMarkerDetails { marker_identifier })
+                                        }
                                     }
                                 }
                             } else if mouse_button == MouseButton::Right && currently_playing {
-                                #[cfg_attr(feature = "debug", korangar_debug::debug_condition(!render_options.use_debug_camera))]
-                                interface_frame.set_mouse_mode(MouseInputMode::RotateCamera);
+                                if self.pending_skill_cast.take().is_none() {
+                                    #[cfg_attr(feature = "debug", korangar_debug::debug_condition(!render_options.use_debug_camera))]
+                                    interface_frame.set_mouse_mode(MouseInputMode::RotateCamera);
+                                }
                             } else if mouse_button == MouseButton::DoubleRight && currently_playing {
                                 #[cfg_attr(feature = "debug", korangar_debug::debug_condition(!render_options.use_debug_camera))]
                                 self.input_event_buffer.push(InputEvent::ResetCameraRotation);

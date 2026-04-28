@@ -21,6 +21,31 @@ fn overhead_message_packet_to_event(packet: OverheadMessagePacket) -> NetworkEve
     }
 }
 
+fn animation_duration(primary: u32, fallback: u32) -> u32 {
+    primary.max(fallback).max(1)
+}
+
+fn use_skill_success_packet_to_event(packet: UseSkillSuccessPacket) -> NetworkEvent {
+    NetworkEvent::SkillUseEffect {
+        source_entity_id: packet.source_entity,
+        destination_entity_id: packet.destination_entity,
+        attack_duration: animation_duration(packet.attack_duration, packet.delay_time),
+    }
+}
+
+fn display_skill_effect_and_damage_packet_to_event(packet: DisplaySkillEffectAndDamagePacket) -> NetworkEvent {
+    const DMG_CRITICAL: u8 = 10;
+    const DMG_MULTI_HIT_CRITICAL: u8 = 13;
+
+    NetworkEvent::DamageEffect {
+        source_entity_id: packet.source_entity_id,
+        destination_entity_id: packet.destination_entity_id,
+        damage_amount: (packet.damage > 0).then_some(packet.damage as usize),
+        attack_duration: animation_duration(packet.soruce_delay, packet.destination_delay),
+        is_critical: matches!(packet.skill_type, DMG_CRITICAL | DMG_MULTI_HIT_CRITICAL),
+    }
+}
+
 pub fn register_login_server_packets<Callback>(
     packet_handler: &mut PacketHandler<NetworkEventList, Callback>,
 ) -> Result<(), DuplicateHandlerError>
@@ -93,6 +118,64 @@ mod tests {
         assert_eq!(text, "Tester : hello");
         assert!(matches!(color, MessageColor::Broadcast));
         assert_eq!(origin_entity_id, Some(EntityId(42)));
+    }
+
+    #[test]
+    fn uses_modern_skill_ack_packet_header() {
+        assert_eq!(UseSkillSuccessPacket::HEADER, PacketHeader(0x0B1A));
+    }
+
+    #[test]
+    fn skill_damage_packet_creates_damage_effect() {
+        let event = display_skill_effect_and_damage_packet_to_event(DisplaySkillEffectAndDamagePacket {
+            skill_id: SkillId(19),
+            source_entity_id: EntityId(1),
+            destination_entity_id: EntityId(2),
+            start_time: ClientTick(100),
+            soruce_delay: 450,
+            destination_delay: 150,
+            damage: 321,
+            level: SkillLevel(1),
+            div: 1,
+            skill_type: 8,
+        });
+
+        let NetworkEvent::DamageEffect {
+            source_entity_id,
+            destination_entity_id,
+            damage_amount,
+            attack_duration,
+            is_critical,
+        } = event
+        else {
+            panic!("expected damage effect event");
+        };
+
+        assert_eq!(source_entity_id, EntityId(1));
+        assert_eq!(destination_entity_id, EntityId(2));
+        assert_eq!(damage_amount, Some(321));
+        assert_eq!(attack_duration, 450);
+        assert!(!is_critical);
+    }
+
+    #[test]
+    fn skill_ack_uses_delay_time_when_attack_duration_is_zero() {
+        let event = use_skill_success_packet_to_event(UseSkillSuccessPacket {
+            source_entity: EntityId(1),
+            destination_entity: EntityId(2),
+            position: TilePosition { x: 0, y: 0 },
+            skill_id: SkillId(19),
+            element: 3,
+            delay_time: 150,
+            disposable: 0,
+            attack_duration: 0,
+        });
+
+        let NetworkEvent::SkillUseEffect { attack_duration, .. } = event else {
+            panic!("expected skill use effect event");
+        };
+
+        assert_eq!(attack_duration, 150);
     }
 }
 
@@ -526,7 +609,7 @@ where
     })?;
     packet_handler.register_noop::<DisplaySpecialEffectPacket>()?;
     packet_handler.register_noop::<DisplaySkillCooldownPacket>()?;
-    packet_handler.register_noop::<DisplaySkillEffectAndDamagePacket>()?;
+    packet_handler.register(display_skill_effect_and_damage_packet_to_event)?;
     packet_handler.register(|packet: DisplaySkillEffectNoDamagePacket| NetworkEvent::HealEffect {
         entity_id: packet.destination_entity_id,
         heal_amount: packet.heal_amount as usize,
@@ -779,7 +862,7 @@ where
             origin_entity_id: None,
         },
     })?;
-    packet_handler.register_noop::<UseSkillSuccessPacket>()?;
+    packet_handler.register(use_skill_success_packet_to_event)?;
     packet_handler.register_noop::<ToUseSkillSuccessPacket>()?;
     packet_handler.register(|packet: NotifySkillUnitPacket| {
         let NotifySkillUnitPacket {

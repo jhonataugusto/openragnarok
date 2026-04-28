@@ -3,7 +3,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::Write;
 use std::sync::mpsc::TryRecvError;
 
-use korangar_debug::logging::{Colorize, print_debug};
+use korangar_debug::logging::{Colorize, log_timestamp, print_debug};
 use korangar_interface::application::{Application, Size};
 use korangar_interface::element::store::{ElementStore, ElementStoreMut};
 use korangar_interface::element::{Element, StateElement};
@@ -44,7 +44,8 @@ fn append_packet_trace(direction: Direction, status: &str, packet_name: &str, ra
     if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(PACKET_TRACE_FILE) {
         let _ = writeln!(
             file,
-            "{}\t{}\t{}\tlen={}\t{}\t{}",
+            "{}\t{}\t{}\t{}\tlen={}\t{}\t{}",
+            log_timestamp(),
             direction.trace_label(),
             status,
             packet_header_text(raw_bytes),

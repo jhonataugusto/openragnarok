@@ -3,6 +3,7 @@
 // Reach the char-server via the `char` service hostname.
 char_ip: char
 
-// IP advertised to the game client. The client runs on the host, where the
-// map-server is published on 127.0.0.1:5121.
-map_ip: 127.0.0.1
+// IP advertised to the game client. Clients reach this server through the
+// Radmin VPN, so we advertise the host's Radmin VPN address. Local clients on
+// the same machine still connect fine because they share the same VPN IP.
+map_ip: 26.126.18.150

@@ -19,6 +19,25 @@ use crate::graphics::{PickerTarget, ScreenPosition, ScreenSize};
 const MOUSE_SCOLL_MULTIPLIER: f32 = 30.0;
 const KEY_COUNT: usize = variant_count::<KeyCode>();
 const DOUBLE_CLICK_TIME_MS: u32 = 250;
+const HOTBAR_NUMBER_KEYS: [KeyCode; 10] = [
+    KeyCode::Digit1,
+    KeyCode::Digit2,
+    KeyCode::Digit3,
+    KeyCode::Digit4,
+    KeyCode::Digit5,
+    KeyCode::Digit6,
+    KeyCode::Digit7,
+    KeyCode::Digit8,
+    KeyCode::Digit9,
+    KeyCode::Digit0,
+];
+
+pub(crate) fn hotbar_slot_for_number_key(key_code: KeyCode) -> Option<HotbarSlot> {
+    HOTBAR_NUMBER_KEYS
+        .iter()
+        .position(|hotbar_key| *hotbar_key == key_code)
+        .map(|slot| HotbarSlot(slot as u16))
+}
 
 #[derive(Debug, Clone, Copy)]
 struct PreviousMouseButton {
@@ -254,28 +273,16 @@ impl InputSystem {
             events.push(InputEvent::CloseTopWindow);
         }
 
-        if self.get_key(KeyCode::KeyJ).pressed() {
-            events.push(InputEvent::CastSkill { slot: HotbarSlot(0) });
-        }
+        for key_code in HOTBAR_NUMBER_KEYS {
+            let slot = hotbar_slot_for_number_key(key_code).unwrap();
 
-        if self.get_key(KeyCode::KeyJ).released() {
-            events.push(InputEvent::StopSkill { slot: HotbarSlot(0) });
-        }
+            if self.get_key(key_code).pressed() {
+                events.push(InputEvent::CastSkill { slot });
+            }
 
-        if self.get_key(KeyCode::KeyL).pressed() {
-            events.push(InputEvent::CastSkill { slot: HotbarSlot(1) });
-        }
-
-        if self.get_key(KeyCode::KeyL).released() {
-            events.push(InputEvent::StopSkill { slot: HotbarSlot(1) });
-        }
-
-        if self.get_key(KeyCode::KeyU).pressed() {
-            events.push(InputEvent::CastSkill { slot: HotbarSlot(2) });
-        }
-
-        if self.get_key(KeyCode::KeyU).released() {
-            events.push(InputEvent::StopSkill { slot: HotbarSlot(2) });
+            if self.get_key(key_code).released() {
+                events.push(InputEvent::StopSkill { slot });
+            }
         }
 
         #[cfg(feature = "debug")]
@@ -346,5 +353,38 @@ impl InputSystem {
         }
 
         self.input_buffer.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ragnarok_packets::HotbarSlot;
+    use winit::keyboard::KeyCode;
+
+    use super::hotbar_slot_for_number_key;
+
+    #[test]
+    fn number_row_keys_map_to_hotbar_slots() {
+        let cases = [
+            (KeyCode::Digit1, HotbarSlot(0)),
+            (KeyCode::Digit2, HotbarSlot(1)),
+            (KeyCode::Digit3, HotbarSlot(2)),
+            (KeyCode::Digit4, HotbarSlot(3)),
+            (KeyCode::Digit5, HotbarSlot(4)),
+            (KeyCode::Digit6, HotbarSlot(5)),
+            (KeyCode::Digit7, HotbarSlot(6)),
+            (KeyCode::Digit8, HotbarSlot(7)),
+            (KeyCode::Digit9, HotbarSlot(8)),
+            (KeyCode::Digit0, HotbarSlot(9)),
+        ];
+
+        for (key_code, expected_slot) in cases {
+            assert_eq!(hotbar_slot_for_number_key(key_code), Some(expected_slot));
+        }
+    }
+
+    #[test]
+    fn non_number_row_keys_do_not_map_to_hotbar_slots() {
+        assert_eq!(hotbar_slot_for_number_key(KeyCode::KeyJ), None);
     }
 }

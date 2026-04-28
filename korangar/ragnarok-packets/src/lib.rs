@@ -3197,7 +3197,7 @@ pub struct DisplaySkillEffectAndDamagePacket {
     pub start_time: ClientTick,
     pub soruce_delay: u32,
     pub destination_delay: u32,
-    pub damage: u32,
+    pub damage: i32,
     pub level: SkillLevel,
     pub div: u16,
     pub skill_type: u8,
@@ -3823,7 +3823,7 @@ pub struct DisconnectResponsePacket {
 
 #[derive(Debug, Clone, Packet, ClientPacket, MapServer)]
 #[cfg_attr(feature = "interface", derive(rust_state::RustState, korangar_interface::element::StateElement))]
-#[header(0x0438)]
+#[header(0x089B)]
 pub struct UseSkillAtIdPacket {
     pub skill_level: SkillLevel,
     pub skill_id: SkillId,
@@ -3859,7 +3859,7 @@ pub struct EndUseSkillPacket {
 
 #[derive(Debug, Clone, Packet, ServerPacket, MapServer)]
 #[cfg_attr(feature = "interface", derive(rust_state::RustState, korangar_interface::element::StateElement))]
-#[header(0x07FB)]
+#[header(0x0B1A)]
 pub struct UseSkillSuccessPacket {
     pub source_entity: EntityId,
     pub destination_entity: EntityId,
@@ -3868,6 +3868,7 @@ pub struct UseSkillSuccessPacket {
     pub element: u32,
     pub delay_time: u32,
     pub disposable: u8,
+    pub attack_duration: u32,
 }
 
 #[derive(Debug, Clone, Packet, ServerPacket, MapServer)]

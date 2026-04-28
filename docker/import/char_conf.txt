@@ -3,9 +3,10 @@
 // Reach the login-server via the `login` service hostname.
 login_ip: login
 
-// IP advertised to the game client. The client runs on the host, where the
-// char-server is published on 127.0.0.1:6121.
-char_ip: 127.0.0.1
+// IP advertised to the game client. Clients reach this server through the
+// Radmin VPN, so we advertise the host's Radmin VPN address. Local clients on
+// the same machine still connect fine because they share the same VPN IP.
+char_ip: 26.126.18.150
 
 // Skip the pincode prompt so login flow is just user/password.
 pincode_enabled: no

@@ -1,3 +1,4 @@
+use crate::logging::log_timestamp;
 use crate::logging::stack::{get_message_count, increment_message_count, message_offset, stack_size};
 use crate::logging::symbols::{ARROW, NEWLINE};
 
@@ -30,7 +31,7 @@ pub fn print_indented(message: String, newline: bool) {
         print!("{NEWLINE} ");
     }
 
-    print!("{message}");
+    print!("{} {message}", log_timestamp());
 
     if newline {
         println!();

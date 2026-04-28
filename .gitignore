@@ -42,6 +42,8 @@ korangar/korangar/*.exe
 korangar/korangar/*.pdb
 korangar/korangar/*.dll
 korangar/korangar/archive/data/font/*
+korangar/korangar/archive/data/**
+korangar/korangar/backup/
 
 # rAthena build/runtime
 rathena-master/autom4te.cache/

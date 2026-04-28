@@ -144,6 +144,11 @@ pub enum NetworkEvent {
         health_points: usize,
         maximum_health_points: usize,
     },
+    SkillUseEffect {
+        source_entity_id: EntityId,
+        destination_entity_id: EntityId,
+        attack_duration: u32,
+    },
     DamageEffect {
         source_entity_id: EntityId,
         destination_entity_id: EntityId,

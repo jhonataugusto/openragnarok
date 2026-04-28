@@ -1,8 +1,8 @@
 //! An OS folder containing game assets.
 use std::collections::HashMap;
 use std::fs;
-use std::fs::File;
 use std::io::{Error, Read};
+use std::time::UNIX_EPOCH;
 use std::path::{Path, PathBuf};
 
 use blake3::Hasher;
@@ -104,18 +104,23 @@ impl Archive for FolderArchive {
     }
 
     fn hash(&self, hasher: &mut Hasher) {
-        let mut files: Vec<PathBuf> = self.file_mapping.values().cloned().collect();
-        files.sort();
-        files.iter().for_each(|file_path| match File::open(file_path) {
-            Ok(file) => {
-                if let Err(_err) = hasher.update_reader(&file) {
-                    #[cfg(feature = "debug")]
-                    print_debug!("Can't hash archive file `{:?}`: {:?}", file_path, _err);
+        let mut files: Vec<(&String, &PathBuf)> = self.file_mapping.iter().collect();
+        files.sort_by(|(left_path, _), (right_path, _)| left_path.cmp(right_path));
+
+        files.iter().for_each(|(asset_path, file_path)| match fs::metadata(file_path) {
+            Ok(metadata) => {
+                hasher.update(asset_path.as_bytes());
+                hasher.update(&metadata.len().to_le_bytes());
+
+                if let Ok(modified) = metadata.modified()
+                    && let Ok(duration) = modified.duration_since(UNIX_EPOCH)
+                {
+                    hasher.update(&duration.as_nanos().to_le_bytes());
                 }
             }
             Err(_err) => {
                 #[cfg(feature = "debug")]
-                print_debug!("Can't open archive file `{:?}`: {:?}", file_path, _err);
+                print_debug!("Can't read archive file metadata `{:?}`: {:?}", file_path, _err);
             }
         });
     }

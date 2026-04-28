@@ -131,7 +131,7 @@ impl Default for InterfaceSettingsCapabilities {
     fn default() -> Self {
         Self {
             // TODO: Don't hardcode this, load it from the disk instead.
-            languages: vec![Language::English, Language::German],
+            languages: vec![Language::English, Language::German, Language::BrazilianPortuguese],
             scalings: vec![
                 Scaling::new(0.5),
                 Scaling::new(0.6),

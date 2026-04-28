@@ -127,6 +127,16 @@ Verificacao minima:
 
 Testes automatizados devem priorizar partes puras do estado de dialogo, como typewriter, revelacao imediata, transicao de botoes e escolha de fallback. A validacao de camera/UI deve incluir teste manual no cliente real.
 
+## Resultado De Implementacao
+
+- Implementado no cliente Korangar na branch `codex/npc-cinematic-dialog`.
+- Dialogo classico preservado como fallback quando o modo cinematico estiver desligado ou quando player/NPC nao puderem ser resolvidos.
+- Modo cinematico adiciona typewriter, opcoes em baloes, bloqueio temporario de movimento/camera manual, camera dinamica configuravel e som por letra com pitch variavel.
+- Verificacao automatica concluida: `cargo check -p korangar --tests`; `cargo check -p korangar-audio`; `cargo test -p korangar-audio pitch`.
+- Review focado aprovado para camera e audio.
+- `cargo test -p korangar cinematic` permanece bloqueado no ambiente local porque `rav1d` exige `nasm`, que nao esta instalado no PATH.
+- Verificacao manual no cliente real ainda pendente.
+
 ## Fora De Escopo
 
 - Alterar `rathena-master/`.

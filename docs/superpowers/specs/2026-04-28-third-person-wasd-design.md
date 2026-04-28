@@ -9,6 +9,7 @@ O Korangar hoje usa câmera de jogador com rotação por mouse e movimento por c
 Adicionar um modo opcional de terceira pessoa no cliente Korangar em que:
 
 - a câmera fica em perspectiva atrás do player, usando orientação/FOV equivalentes à DebugCamera em vez de enquadramento isométrico/top-down;
+- a câmera fica 1 célula/metro de jogo acima do ponto de foco do player;
 - a câmera gira somente com botão direito segurado;
 - a câmera segue o player com suavização mais lenta que a câmera atual;
 - a distância da câmera é suavizada e limitada entre cerca de 1 e 5 células/metros de jogo;

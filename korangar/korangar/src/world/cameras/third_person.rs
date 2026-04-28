@@ -11,6 +11,7 @@ const MAXIMUM_DISTANCE: f32 = GAT_TILE_SIZE * 5.0;
 const DEFAULT_DISTANCE: f32 = GAT_TILE_SIZE * 3.0;
 const MINIMUM_PITCH: f32 = -65_f32.to_radians();
 const MAXIMUM_PITCH: f32 = 65_f32.to_radians();
+const HEIGHT_OFFSET: f32 = GAT_TILE_SIZE;
 const VERTICAL_FOV: Deg<f32> = Deg(45.0);
 const THRESHOLD: f32 = 0.01;
 const LOOK_UP: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
@@ -78,7 +79,7 @@ impl ThirdPersonCamera {
         self.camera_distance.update(delta_time);
 
         let view_distance = self.camera_distance.get_current();
-        self.camera_position = self.focus_point() - self.view_direction() * view_distance;
+        self.camera_position = self.focus_point() + Vector3::unit_y() * HEIGHT_OFFSET - self.view_direction() * view_distance;
     }
 }
 
@@ -117,7 +118,7 @@ impl Camera for ThirdPersonCamera {
 
 #[cfg(test)]
 mod tests {
-    use cgmath::{MetricSpace, Point3, Vector3, assert_relative_eq};
+    use cgmath::{InnerSpace, Point3, Vector2, Vector3, assert_relative_eq};
 
     use super::*;
 
@@ -132,14 +133,25 @@ mod tests {
     }
 
     #[test]
+    fn camera_starts_one_tile_above_focus_point() {
+        let focus_point = Point3::new(20.0, 7.0, 30.0);
+        let mut camera = ThirdPersonCamera::new();
+        camera.set_focus_point(focus_point);
+        camera.update(1.0 / 60.0);
+
+        assert_relative_eq!(camera.camera_position().y, focus_point.y + GAT_TILE_SIZE, epsilon = 1e-6);
+    }
+
+    #[test]
     fn default_distance_starts_close_to_player() {
         let focus_point = Point3::new(0.0, 0.0, 0.0);
         let mut camera = ThirdPersonCamera::new();
         camera.set_focus_point(focus_point);
         camera.update(1.0 / 60.0);
+        let camera_offset = camera.camera_position() - focus_point;
 
         assert_relative_eq!(
-            camera.camera_position().distance(focus_point),
+            Vector2::new(camera_offset.x, camera_offset.z).magnitude(),
             GAT_TILE_SIZE * 3.0,
             epsilon = 1e-6
         );
@@ -153,12 +165,18 @@ mod tests {
 
         camera.soft_zoom(-1000.0);
         camera.update(1.0);
-        assert_relative_eq!(camera.camera_position().distance(focus_point), GAT_TILE_SIZE, epsilon = 1e-6);
+        let camera_offset = camera.camera_position() - focus_point;
+        assert_relative_eq!(
+            Vector2::new(camera_offset.x, camera_offset.z).magnitude(),
+            GAT_TILE_SIZE,
+            epsilon = 1e-6
+        );
 
         camera.soft_zoom(1000.0);
         camera.update(1.0);
+        let camera_offset = camera.camera_position() - focus_point;
         assert_relative_eq!(
-            camera.camera_position().distance(focus_point),
+            Vector2::new(camera_offset.x, camera_offset.z).magnitude(),
             GAT_TILE_SIZE * 5.0,
             epsilon = 1e-6
         );

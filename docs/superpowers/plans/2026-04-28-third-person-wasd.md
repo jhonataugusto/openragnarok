@@ -37,7 +37,7 @@
 - Modify: `korangar/korangar/src/world/cameras/mod.rs`
 - Modify: `korangar/korangar/src/main.rs`
 
-- [ ] Add `ThirdPersonCamera` with smoothed focus, smoothed distance clamp, yaw, non-isometric pitch clamp, and view/projection generation.
+- [ ] Add `ThirdPersonCamera` with smoothed focus, smoothed distance clamp, DebugCamera-style quaternion orientation/FOV, and view/projection generation.
 - [ ] Export it through `world::cameras`.
 - [ ] Add it to `Client` initialization and render camera selection.
 

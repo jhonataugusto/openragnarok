@@ -132,8 +132,8 @@ const DEFAULT_BACKGROUND_MUSIC: Option<&str> = Some("bgm\\01.mp3");
 const MAIN_MENU_CLICK_SOUND_EFFECT: &str = "버튼소리.wav";
 const CINEMATIC_DIALOG_TEXT_SOUND_EFFECT: &str = MAIN_MENU_CLICK_SOUND_EFFECT;
 const ITEM_PICKUP_RANGE: AttackRange = AttackRange(1);
-const THIRD_PERSON_MOVEMENT_TILE_DISTANCE: i16 = 5;
-const THIRD_PERSON_MOVEMENT_THROTTLE_MS: u32 = 500;
+const THIRD_PERSON_MOVEMENT_TILE_DISTANCE: i16 = 1;
+const THIRD_PERSON_MOVEMENT_THROTTLE_MS: u32 = 250;
 // TODO: The number of point lights that can cast shadows should be configurable
 // through the graphics settings. For now I just chose an arbitrary smaller
 // number that should be playable on most devices.

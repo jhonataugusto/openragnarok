@@ -7,10 +7,10 @@ const ZOOM_SPEED: f32 = 1.0;
 const ROTATION_SPEED: f32 = 0.005;
 const DEFAULT_DISTANCE: f32 = 300.0;
 const DEFAULT_YAW: f32 = 180_f32.to_radians();
-const DEFAULT_PITCH: f32 = -35_f32.to_radians();
-const MINIMUM_PITCH: f32 = -65_f32.to_radians();
-const MAXIMUM_PITCH: f32 = -15_f32.to_radians();
-const VERTICAL_FOV: Deg<f32> = Deg(22.0);
+const DEFAULT_PITCH: f32 = -12_f32.to_radians();
+const MINIMUM_PITCH: f32 = -30_f32.to_radians();
+const MAXIMUM_PITCH: f32 = -5_f32.to_radians();
+const VERTICAL_FOV: Deg<f32> = Deg(35.0);
 const THRESHOLD: f32 = 0.01;
 const LOOK_UP: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
 

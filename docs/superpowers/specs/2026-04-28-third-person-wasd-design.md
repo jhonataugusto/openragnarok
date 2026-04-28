@@ -8,7 +8,7 @@ O Korangar hoje usa câmera de jogador com rotação por mouse e movimento por c
 
 Adicionar um modo opcional de terceira pessoa no cliente Korangar em que:
 
-- a câmera fica em perspectiva atrás do player;
+- a câmera fica em perspectiva atrás do player, sem enquadramento isométrico/top-down;
 - a câmera gira somente com botão direito segurado;
 - a câmera segue o player com suavização mais lenta que a câmera atual;
 - a distância da câmera é suavizada e limitada por mínimo e máximo;
@@ -55,13 +55,13 @@ Enquanto o modo estiver ativo, `W/A/S/D` deve gerar `InputEvent::PlayerMove { de
 
 Regras:
 
-- `W`: 5 tiles para frente em relação à direção horizontal da câmera.
-- `S`: 5 tiles para trás.
-- `A`: 5 tiles para esquerda.
-- `D`: 5 tiles para direita.
-- Combinações diagonais normalizam o vetor antes de calcular o destino, mantendo alvo de 5 tiles em vez de somar distâncias.
+- `W`: 1 tile para frente em relação à direção horizontal da câmera.
+- `S`: 1 tile para trás.
+- `A`: 1 tile para esquerda.
+- `D`: 1 tile para direita.
+- Combinações diagonais normalizam o vetor antes de calcular o destino, mantendo alvo curto em vez de somar distâncias.
 - O primeiro envio acontece imediatamente quando uma tecla de movimento começa a ser pressionada.
-- Enquanto a tecla continua segurada, novos destinos são enviados no máximo a cada 0,5 segundo.
+- Enquanto a tecla continua segurada, novos destinos são enviados no máximo a cada 0,25 segundo.
 - Ao soltar todas as teclas de movimento, o cliente não envia pacote de parada; apenas para de gerar novos destinos.
 - O player segue até o último destino aceito pelo servidor, como acontece ao parar de segurar o clique do mouse.
 - Se a câmera girar enquanto uma tecla está segurada, o próximo envio após o throttle usa a nova direção da câmera.
@@ -107,7 +107,7 @@ O bloqueio é específico para movimento por clique no chão. Devem continuar fu
 Validação manual mínima:
 
 1. Com a opção desligada, o movimento por clique e a câmera clássica continuam como antes.
-2. Com a opção ligada, segurar `W` faz o player continuar recebendo destinos de 5 tiles na direção da câmera a cada 0,5s.
+2. Com a opção ligada, segurar `W` faz o player continuar recebendo destinos de 1 tile na direção da câmera a cada 0,25s.
 3. Soltar `W` faz o player parar de receber novos destinos e terminar no último destino.
 4. `W+A` e outras diagonais funcionam sem distância exagerada.
 5. Girar a câmera com botão direito enquanto anda muda os próximos destinos.
@@ -117,7 +117,7 @@ Validação manual mínima:
 Testes automatizados desejáveis:
 
 - unidade para conversão de input WASD + direção da câmera em vetor de tile;
-- unidade para throttle de 0,5s;
+- unidade para throttle de 0,25s;
 - unidade para configuração antiga carregar com `third_person_movement_enabled = false`.
 
 ## Decisões
@@ -127,4 +127,4 @@ Testes automatizados desejáveis:
 - A câmera não controla a rotação do player como volante.
 - O clique no chão é o único fluxo bloqueado para não enviar movimento ao servidor.
 - Diagonal é suportada e normalizada.
-- O throttle de movimento segurado é 0,5 segundo.
+- O throttle de movimento segurado é 0,25 segundo.

@@ -251,6 +251,46 @@ impl Cacheable for Map {
     }
 }
 
+fn segment_aabb_intersection_fraction(start: Point3<f32>, end: Point3<f32>, aabb: AABB) -> Option<f32> {
+    let direction = end - start;
+    let min = aabb.min();
+    let max = aabb.max();
+
+    let mut t_min: f32 = 0.0;
+    let mut t_max: f32 = 1.0;
+
+    for (start_component, direction_component, min_component, max_component) in [
+        (start.x, direction.x, min.x, max.x),
+        (start.y, direction.y, min.y, max.y),
+        (start.z, direction.z, min.z, max.z),
+    ] {
+        if direction_component.abs() <= f32::EPSILON {
+            if start_component < min_component || start_component > max_component {
+                return None;
+            }
+
+            continue;
+        }
+
+        let inverse_direction = 1.0 / direction_component;
+        let mut t_0 = (min_component - start_component) * inverse_direction;
+        let mut t_1 = (max_component - start_component) * inverse_direction;
+
+        if t_0 > t_1 {
+            std::mem::swap(&mut t_0, &mut t_1);
+        }
+
+        t_min = t_min.max(t_0);
+        t_max = t_max.min(t_1);
+
+        if t_min > t_max {
+            return None;
+        }
+    }
+
+    Some(t_min.max(0.0))
+}
+
 impl Map {
     fn average_tile_height(tile: &Tile) -> f32 {
         (tile.southwest_corner_height + tile.southeast_corner_height + tile.northwest_corner_height + tile.northeast_corner_height) / 4.0
@@ -292,6 +332,22 @@ impl Map {
 
     pub fn get_level_bound(&self) -> AABB {
         self.level_bound
+    }
+
+    pub fn first_object_intersection_fraction(&self, start: Point3<f32>, end: Point3<f32>, padding: f32) -> Option<f32> {
+        let query = AABB::new(start, end).expanded(padding);
+        let mut object_keys = Vec::new();
+        self.object_kdtree.query(&query, &mut object_keys);
+
+        object_keys
+            .into_iter()
+            .filter_map(|object_key| {
+                self.objects
+                    .get(object_key)
+                    .and_then(|object| segment_aabb_intersection_fraction(start, end, object.calculate_object_aabb().expanded(padding)))
+            })
+            .filter(|fraction| *fraction < 1.0)
+            .min_by(|left, right| left.total_cmp(right))
     }
 
     pub fn get_tile_picker_index_buffer(&self) -> &Buffer<u32> {

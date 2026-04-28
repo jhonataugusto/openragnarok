@@ -1,14 +1,19 @@
-use cgmath::{Deg, InnerSpace, Matrix4, Point3, Vector2, Vector3, Zero};
+use cgmath::{Deg, InnerSpace, Matrix4, MetricSpace, Point3, Vector2, Vector3, Zero};
+use ragnarok_formats::map::TileFlags;
 use ragnarok_packets::Direction;
 
 use super::{Camera, SmoothedValue};
 use crate::graphics::perspective_reverse_lh;
+use crate::loaders::GAT_TILE_SIZE;
+use crate::world::Map;
 
 const THRESHOLD: f32 = 0.01;
 const CAMERA_HEIGHT: f32 = 18.0;
 const CAMERA_DISTANCE: f32 = 230.0;
 const RIGHT_OFFSET: f32 = 55.0;
 const FOCUS_HEIGHT: f32 = 12.0;
+const CAMERA_COLLISION_STEP_LENGTH: f32 = GAT_TILE_SIZE * 0.5;
+const CAMERA_COLLISION_PADDING: f32 = GAT_TILE_SIZE * 1.5;
 const VERTICAL_FOV: Deg<f32> = Deg(18.0);
 const LOOK_UP: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
 
@@ -43,8 +48,14 @@ impl CinematicCamera {
         self.update_view_direction();
     }
 
-    pub fn set_dynamic_targets(&mut self, player_position: Point3<f32>, npc_position: Point3<f32>, player_direction: Direction) {
-        let (camera_position, focus_point) = Self::calculate_targets(player_position, npc_position, player_direction);
+    pub fn set_dynamic_targets(
+        &mut self,
+        map: Option<&Map>,
+        player_position: Point3<f32>,
+        npc_position: Point3<f32>,
+        player_direction: Direction,
+    ) {
+        let (camera_position, focus_point) = Self::calculate_targets(map, player_position, npc_position, player_direction);
         self.camera_position.x.set_desired(camera_position.x);
         self.camera_position.y.set_desired(camera_position.y);
         self.camera_position.z.set_desired(camera_position.z);
@@ -64,6 +75,7 @@ impl CinematicCamera {
     }
 
     fn calculate_targets(
+        map: Option<&Map>,
         player_position: Point3<f32>,
         npc_position: Point3<f32>,
         player_direction: Direction,
@@ -75,9 +87,64 @@ impl CinematicCamera {
             (player_position.y + npc_position.y) * 0.5 + FOCUS_HEIGHT,
             (player_position.z + npc_position.z) * 0.5,
         );
-        let camera_position = player_position - forward * CAMERA_DISTANCE + right * RIGHT_OFFSET + Vector3::new(0.0, CAMERA_HEIGHT, 0.0);
+        let desired_camera_position =
+            player_position - forward * CAMERA_DISTANCE - right * RIGHT_OFFSET + Vector3::new(0.0, CAMERA_HEIGHT, 0.0);
+        let camera_position = map
+            .map(|map| Self::resolve_camera_collision(map, player_position, desired_camera_position))
+            .unwrap_or(desired_camera_position);
 
         (camera_position, focus_point)
+    }
+
+    fn resolve_camera_collision(map: &Map, player_position: Point3<f32>, desired_camera_position: Point3<f32>) -> Point3<f32> {
+        let target_vector = desired_camera_position - player_position;
+        let target_distance = target_vector.magnitude();
+
+        if target_distance <= f32::EPSILON {
+            return desired_camera_position;
+        }
+
+        let target_direction = target_vector / target_distance;
+        let adjusted_target_distance = map
+            .first_object_intersection_fraction(player_position, desired_camera_position, CAMERA_COLLISION_PADDING)
+            .map(|fraction| (target_distance * fraction - CAMERA_COLLISION_PADDING).max(0.0))
+            .unwrap_or(target_distance);
+        let steps = (adjusted_target_distance / CAMERA_COLLISION_STEP_LENGTH).ceil().max(1.0) as usize;
+        let mut last_clear_position = None;
+
+        for step in 1..=steps {
+            let distance = (step as f32 * CAMERA_COLLISION_STEP_LENGTH).min(adjusted_target_distance);
+            let sample_position = player_position + target_direction * distance;
+
+            if Self::is_camera_position_clear(map, sample_position) {
+                last_clear_position = Some(sample_position);
+                continue;
+            }
+
+            return last_clear_position
+                .map(|position| {
+                    let padded_distance = (player_position.distance(position) - CAMERA_COLLISION_PADDING).max(0.0);
+                    player_position + target_direction * padded_distance
+                })
+                .unwrap_or(player_position + Vector3::new(0.0, CAMERA_HEIGHT, 0.0));
+        }
+
+        player_position + target_direction * adjusted_target_distance
+    }
+
+    fn is_camera_position_clear(map: &Map, position: Point3<f32>) -> bool {
+        if position.x < 0.0 || position.z < 0.0 {
+            return false;
+        }
+
+        let tile_position = ragnarok_packets::TilePosition {
+            x: (position.x / GAT_TILE_SIZE).floor() as u16,
+            y: (position.z / GAT_TILE_SIZE).floor() as u16,
+        };
+
+        map.get_tile(tile_position)
+            .map(|tile| tile.flags.contains(TileFlags::WALKABLE) && tile.flags.contains(TileFlags::SNIPABLE))
+            .unwrap_or(false)
     }
 
     fn update_view_direction(&mut self) {
@@ -144,10 +211,10 @@ mod tests {
         let initial_focus_point = Point3::new(5.0, 10.0, 15.0);
         let player_position = Point3::new(100.0, 0.0, 100.0);
         let npc_position = Point3::new(120.0, 0.0, 160.0);
-        let (target_camera_position, _) = CinematicCamera::calculate_targets(player_position, npc_position, Direction::North);
+        let (target_camera_position, _) = CinematicCamera::calculate_targets(None, player_position, npc_position, Direction::North);
 
         camera.set_immediate_to(initial_camera_position, initial_focus_point);
-        camera.set_dynamic_targets(player_position, npc_position, Direction::North);
+        camera.set_dynamic_targets(None, player_position, npc_position, Direction::North);
 
         assert_relative_eq!(camera.camera_position(), initial_camera_position, epsilon = 1e-6);
 
@@ -161,11 +228,12 @@ mod tests {
         let player_position = Point3::new(100.0, 0.0, 100.0);
         let npc_position = Point3::new(100.0, 0.0, 200.0);
 
-        let (north_camera_position, _) = CinematicCamera::calculate_targets(player_position, npc_position, Direction::North);
-        let (east_camera_position, _) = CinematicCamera::calculate_targets(player_position, npc_position, Direction::East);
+        let (north_camera_position, _) = CinematicCamera::calculate_targets(None, player_position, npc_position, Direction::North);
+        let (east_camera_position, _) = CinematicCamera::calculate_targets(None, player_position, npc_position, Direction::East);
 
         assert!(north_camera_position.z < player_position.z);
         assert!(east_camera_position.x < player_position.x);
+        assert!(north_camera_position.x < player_position.x);
     }
 
     #[test]
@@ -173,7 +241,7 @@ mod tests {
         let player_position = Point3::new(100.0, 0.0, 100.0);
         let npc_position = Point3::new(120.0, 0.0, 160.0);
 
-        let (camera_position, focus_point) = CinematicCamera::calculate_targets(player_position, npc_position, Direction::North);
+        let (camera_position, focus_point) = CinematicCamera::calculate_targets(None, player_position, npc_position, Direction::North);
 
         assert_relative_eq!(camera_position.y, player_position.y + CAMERA_HEIGHT, epsilon = 1e-6);
         assert_relative_eq!(

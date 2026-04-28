@@ -3016,7 +3016,7 @@ impl Client {
                 }
 
                 self.cinematic_camera
-                    .set_dynamic_targets(player_position, npc_position, player_direction);
+                    .set_dynamic_targets(self.map.as_deref(), player_position, npc_position, player_direction);
                 self.cinematic_camera.update(delta_time);
                 self.cinematic_camera.generate_view_projection(window_size);
             }

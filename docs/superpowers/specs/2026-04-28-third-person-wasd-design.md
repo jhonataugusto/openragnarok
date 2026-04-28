@@ -12,7 +12,7 @@ Adicionar um modo opcional de terceira pessoa no cliente Korangar em que:
 - a câmera fica 1 célula/metro de jogo acima do ponto de foco do player;
 - a câmera gira somente com botão direito segurado;
 - a câmera segue o player com suavização mais lenta que a câmera atual;
-- a distância da câmera é suavizada e limitada entre cerca de 1 e 5 células/metros de jogo;
+- a distância da câmera é suavizada e limitada entre cerca de 7 e 13 células/metros de jogo;
 - `W/A/S/D` envia movimento por tile com base na direção horizontal da câmera;
 - diagonais como `W+A`, `W+D`, `S+A` e `S+D` são suportadas;
 - clique no chão não envia movimento enquanto o modo estiver ativo;
@@ -42,7 +42,7 @@ Criar uma câmera nova, por exemplo `ThirdPersonCamera`, separada de `PlayerCame
 A câmera deve:
 
 - seguir o player com foco suavizado usando atraso maior que o `PlayerCamera`;
-- manter distância suavizada com clamp entre `GAT_TILE_SIZE` e `GAT_TILE_SIZE * 5.0`;
+- manter distância suavizada com clamp entre `GAT_TILE_SIZE * 7.0` e `GAT_TILE_SIZE * 13.0`;
 - usar yaw horizontal controlado pelo arrasto do mouse com botão direito segurado;
 - usar pitch vertical com clamp simétrico para impedir olhar demais para cima ou para baixo;
 - calcular `view_direction()` normalmente para renderização e para o input WASD;

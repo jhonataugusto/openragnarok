@@ -6,9 +6,9 @@ use crate::loaders::GAT_TILE_SIZE;
 
 const ZOOM_SPEED: f32 = 1.0;
 const LOOK_AROUND_SPEED: f32 = 0.005;
-const MINIMUM_DISTANCE: f32 = GAT_TILE_SIZE;
-const MAXIMUM_DISTANCE: f32 = GAT_TILE_SIZE * 5.0;
-const DEFAULT_DISTANCE: f32 = GAT_TILE_SIZE * 3.0;
+const MINIMUM_DISTANCE: f32 = GAT_TILE_SIZE * 7.0;
+const MAXIMUM_DISTANCE: f32 = GAT_TILE_SIZE * 13.0;
+const DEFAULT_DISTANCE: f32 = GAT_TILE_SIZE * 10.0;
 const MINIMUM_PITCH: f32 = -65_f32.to_radians();
 const MAXIMUM_PITCH: f32 = 65_f32.to_radians();
 const HEIGHT_OFFSET: f32 = GAT_TILE_SIZE;
@@ -152,13 +152,13 @@ mod tests {
 
         assert_relative_eq!(
             Vector2::new(camera_offset.x, camera_offset.z).magnitude(),
-            GAT_TILE_SIZE * 3.0,
+            GAT_TILE_SIZE * 10.0,
             epsilon = 1e-6
         );
     }
 
     #[test]
-    fn camera_distance_clamps_between_one_and_five_tiles() {
+    fn camera_distance_clamps_between_seven_and_thirteen_tiles() {
         let focus_point = Point3::new(0.0, 0.0, 0.0);
         let mut camera = ThirdPersonCamera::new();
         camera.set_focus_point(focus_point);
@@ -168,7 +168,7 @@ mod tests {
         let camera_offset = camera.camera_position() - focus_point;
         assert_relative_eq!(
             Vector2::new(camera_offset.x, camera_offset.z).magnitude(),
-            GAT_TILE_SIZE,
+            GAT_TILE_SIZE * 7.0,
             epsilon = 1e-6
         );
 
@@ -177,7 +177,7 @@ mod tests {
         let camera_offset = camera.camera_position() - focus_point;
         assert_relative_eq!(
             Vector2::new(camera_offset.x, camera_offset.z).magnitude(),
-            GAT_TILE_SIZE * 5.0,
+            GAT_TILE_SIZE * 13.0,
             epsilon = 1e-6
         );
     }

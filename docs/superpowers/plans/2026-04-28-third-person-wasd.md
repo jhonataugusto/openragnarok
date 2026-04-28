@@ -49,7 +49,7 @@
 - Modify: `korangar/korangar/src/main.rs`
 
 - [ ] Add camera rotation input for third-person yaw/pitch while right mouse is held.
-- [ ] Generate WASD movement immediately, then at most every 250ms while held.
+- [ ] Generate WASD movement immediately, then adaptively every 40ms or more while held when the destination changes.
 - [ ] Stop generating destinations when movement keys are released.
 - [ ] Block only click-to-move on `PickerTarget::Tile` while third-person mode is active.
 

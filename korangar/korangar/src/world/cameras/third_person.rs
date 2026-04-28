@@ -5,7 +5,7 @@ use crate::graphics::perspective_reverse_lh;
 
 const ZOOM_SPEED: f32 = 1.0;
 const LOOK_AROUND_SPEED: f32 = 0.005;
-const DEFAULT_DISTANCE: f32 = 300.0;
+const DEFAULT_DISTANCE: f32 = 180.0;
 const VERTICAL_FOV: Deg<f32> = Deg(45.0);
 const THRESHOLD: f32 = 0.01;
 const LOOK_UP: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
@@ -102,7 +102,7 @@ impl Camera for ThirdPersonCamera {
 
 #[cfg(test)]
 mod tests {
-    use cgmath::{Point3, Vector3, assert_relative_eq};
+    use cgmath::{MetricSpace, Point3, Vector3, assert_relative_eq};
 
     use super::*;
 
@@ -114,5 +114,15 @@ mod tests {
 
         assert_relative_eq!(camera.view_direction(), Vector3::unit_z(), epsilon = 1e-6);
         assert!(camera.camera_position().z < 0.0);
+    }
+
+    #[test]
+    fn default_distance_starts_close_to_player() {
+        let focus_point = Point3::new(0.0, 0.0, 0.0);
+        let mut camera = ThirdPersonCamera::new();
+        camera.set_focus_point(focus_point);
+        camera.update(1.0 / 60.0);
+
+        assert_relative_eq!(camera.camera_position().distance(focus_point), 180.0, epsilon = 1e-6);
     }
 }

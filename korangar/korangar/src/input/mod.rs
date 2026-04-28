@@ -470,8 +470,8 @@ mod tests {
         };
 
         assert_eq!(
-            tile_offset_for_camera_movement(keys, Vector3::new(0.0, -0.5, 1.0), 1),
-            Some((0, 1))
+            tile_offset_for_camera_movement(keys, Vector3::new(0.0, -0.5, 1.0), 5),
+            Some((0, 5))
         );
     }
 
@@ -484,8 +484,8 @@ mod tests {
         };
 
         assert_eq!(
-            tile_offset_for_camera_movement(keys, Vector3::new(0.0, -0.5, 1.0), 1),
-            Some((-1, 1))
+            tile_offset_for_camera_movement(keys, Vector3::new(0.0, -0.5, 1.0), 5),
+            Some((-4, 4))
         );
     }
 }

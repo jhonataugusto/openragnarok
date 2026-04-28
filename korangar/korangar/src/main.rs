@@ -132,8 +132,8 @@ const DEFAULT_BACKGROUND_MUSIC: Option<&str> = Some("bgm\\01.mp3");
 const MAIN_MENU_CLICK_SOUND_EFFECT: &str = "버튼소리.wav";
 const CINEMATIC_DIALOG_TEXT_SOUND_EFFECT: &str = MAIN_MENU_CLICK_SOUND_EFFECT;
 const ITEM_PICKUP_RANGE: AttackRange = AttackRange(1);
-const THIRD_PERSON_MOVEMENT_TILE_DISTANCE: i16 = 1;
-const THIRD_PERSON_MOVEMENT_THROTTLE_MS: u32 = 250;
+const THIRD_PERSON_MOVEMENT_TILE_DISTANCE: i16 = 5;
+const THIRD_PERSON_MOVEMENT_THROTTLE_MS: u32 = 40;
 // TODO: The number of point lights that can cast shadows should be configurable
 // through the graphics settings. For now I just chose an arbitrary smaller
 // number that should be playable on most devices.
@@ -395,6 +395,24 @@ impl ThirdPersonMovementState {
         self.was_moving = false;
         self.last_sent_at = None;
         self.last_destination = None;
+    }
+}
+
+#[cfg(test)]
+mod third_person_movement_tests {
+    use ragnarok_packets::{ClientTick, TilePosition};
+
+    use super::ThirdPersonMovementState;
+
+    #[test]
+    fn movement_state_sends_adaptively_after_40ms_when_destination_changes() {
+        let mut state = ThirdPersonMovementState::default();
+        let first_destination = TilePosition { x: 10, y: 10 };
+        let second_destination = TilePosition { x: 11, y: 10 };
+
+        assert!(state.should_send(true, Some(first_destination), ClientTick(1000)));
+        assert!(!state.should_send(true, Some(second_destination), ClientTick(1039)));
+        assert!(state.should_send(true, Some(second_destination), ClientTick(1040)));
     }
 }
 

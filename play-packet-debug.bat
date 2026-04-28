@@ -7,6 +7,11 @@ setlocal
 set "ROOT=%~dp0"
 set "TRACE=%ROOT%korangar\korangar\packet-trace.log"
 set "TAIL=%ROOT%packet-debug-terminal.ps1"
+set "DISABLE_QUICKEDIT=%ROOT%disable-console-quickedit.ps1"
+
+if exist "%DISABLE_QUICKEDIT%" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%DISABLE_QUICKEDIT%" >NUL 2>NUL
+)
 
 tasklist /FI "IMAGENAME eq korangar.exe" 2>NUL | find /I "korangar.exe" >NUL
 if not errorlevel 1 (

@@ -1,8 +1,10 @@
-# Roadmap: Ragnarok Respawn Fix
+# Roadmap: Ragnarok Client Modernization
 
 ## Overview
 
-Este roadmap entrega uma correcao minima comprovada para o bug de respawn visual no workspace Korangar + rAthena. O caminho segue a ordem causal do problema: reproduzir o bug atual, coletar evidencia de pacotes/eventos/entidade, aplicar o menor fix no ponto comprovado, validar manualmente o fluxo `@kill -> Respawn` e registrar a causa para continuidade.
+Este roadmap agora acompanha a evolucao do cliente Korangar apos o encerramento do diagnostico de respawn. O milestone anterior de respawn foi fechado por descoberta externa ao plano completo: faltava registrar/tratar um pacote desconhecido como evento no cliente.
+
+O proximo milestone sera definido para a feature de dialogo cinematico com NPCs.
 
 ## Phases
 
@@ -12,13 +14,12 @@ Este roadmap entrega uma correcao minima comprovada para o bug de respawn visual
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [x] **Phase 1: Reproducao e Baseline Manual** - Ambiente local e bug atual confirmados antes de qualquer mudanca permanente. (Completed 2026-04-27)
-- [ ] **Phase 2: Evidencia de Pacotes, Eventos e Entidade** - Fluxo real de respawn capturado e causa provavel classificada.
-- [ ] **Phase 3: Fix Minimo no Ponto Causal** - Menor correcao segura aplicada ao cliente, servidor ou integracao conforme evidencia.
-- [ ] **Phase 4: Verificacao Manual Direcionada** - Fluxo corrigido validado manualmente com estado visual vivo, movimento, HP e janela fechada.
-- [ ] **Phase 5: Limpeza e Registro Final** - Instrumentacao temporaria removida e decisao tecnica registrada para proximas sessoes.
+- [x] **Closed: Respawn Diagnostic** - Encerrado em 2026-04-28; causa informada: pacote desconhecido nao registrado/tratado como evento no cliente.
+- [ ] **Next: NPC Cinematic Dialog** - A definir apos brainstorming/spec; opcao global, dialogo classico preservado, camera/input/audio/UI cinematicos.
 
-## Phase Details
+## Historical Phase Details
+
+As fases abaixo pertencem ao diagnostico de respawn encerrado. Elas ficam preservadas como historico, mas nao sao mais o caminho ativo do projeto.
 
 ### Phase 1: Reproducao e Baseline Manual
 **Goal**: O desenvolvedor consegue reproduzir e documentar o bug atual no ambiente local antes de alterar comportamento permanente.
@@ -78,12 +79,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
+O fluxo antigo 1 -> 2 -> 3 -> 4 -> 5 foi superseded pela descoberta do pacote/evento ausente no cliente. O proximo fluxo sera definido apos a spec do milestone NPC Cinematic Dialog.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Reproducao e Baseline Manual | 1/1 | Complete | 2026-04-27 |
-| 2. Evidencia de Pacotes, Eventos e Entidade | 0/TBD | Not started | - |
-| 3. Fix Minimo no Ponto Causal | 0/TBD | Not started | - |
-| 4. Verificacao Manual Direcionada | 0/TBD | Not started | - |
-| 5. Limpeza e Registro Final | 0/TBD | Not started | - |
+| Respawn Diagnostic | 1/1 formal plan, remaining phases superseded | Closed | 2026-04-28 |
+| NPC Cinematic Dialog | TBD | Discovery | - |

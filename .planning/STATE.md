@@ -1,36 +1,36 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
-status: planning
-stopped_at: Phase 1 complete; next step is planning Phase 2.
-last_updated: "2026-04-27T01:52:02-03:00"
-last_activity: 2026-04-27 - Phase 1 complete; respawn bug reproduced and baseline recorded.
+milestone_name: NPC Cinematic Dialog
+status: discovery
+stopped_at: Respawn diagnostic closed; brainstorming NPC cinematic dialog milestone.
+last_updated: "2026-04-28T00:00:00-03:00"
+last_activity: 2026-04-28 - Respawn bug closed by client packet/event registration discovery; new feature milestone selected.
 progress:
-  total_phases: 5
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 20
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-27)
+See: .planning/PROJECT.md (updated 2026-04-28)
 
-**Core value:** Depois de `@kill -> Respawn`, o player deve voltar visualmente vivo, com janela de respawn fechada, sem depender de tentativa cega ou workaround nao comprovado.
-**Current focus:** Phase 2: Evidencia de Pacotes, Eventos e Entidade
+**Core value:** Dialogos com NPCs podem ganhar apresentacao cinematica moderna sem remover o dialogo classico atual.
+**Current focus:** Brainstorming/spec do milestone NPC Cinematic Dialog
 
 ## Current Position
 
-Phase: 2 of 5 (Evidencia de Pacotes, Eventos e Entidade)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-04-27 - Phase 1 complete; respawn bug reproduced and baseline recorded.
+Phase: TBD
+Plan: TBD
+Status: Discovery
+Last activity: 2026-04-28 - Usuario encerrou diagnostico do respawn e escolheu iniciar novo milestone de feature.
 
-Progress: [##--------] 20%
+Progress: [----------] 0%
 
 ## Performance Metrics
 
@@ -60,10 +60,18 @@ Progress: [##--------] 20%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- v1 segue correcao minima comprovada: reproduzir, evidenciar, corrigir, verificar manualmente e registrar.
-- Cliente Korangar e servidor rAthena continuam candidatos ate a evidencia classificar a causa.
-- `PACKETVER=20220406` deve permanecer fixo durante a investigacao.
-- Phase 1 baseline confirmed: after `@kill -> Respawn`, the player remains dead/lying down; Respawn window closes; HP does not restore; movement does not work.
+- Respawn diagnostic closed: causa informada foi pacote desconhecido nao registrado como evento no cliente.
+- Novo milestone selecionado: dialogo cinematico de NPC no cliente Korangar.
+- A feature deve ser opcional via Interface Settings.
+- Quando ativa, a feature deve se aplicar a todos os dialogos de NPC.
+- Durante dialogo cinematico, movimento e controle manual de camera devem ficar temporariamente travados.
+- A camera cinematica deve ser dinamica, sem cortes, e configuravel por toggle simples.
+- O texto deve aparecer em typewriter, com acao para revelar tudo antes de avancar.
+- Mouse esquerdo, Enter e Espaco devem revelar/avancar o dialogo cinematico.
+- Som por letra deve ter toggle simples ligado/desligado, usar volume de efeitos e variar pitch automaticamente.
+- Opcoes de resposta devem aparecer como baloes empilhados acima da caixa de dialogo, centralizados perto da parte inferior.
+- UI cinematica deve substituir visualmente a janela classica quando o modo estiver ativo.
+- Abordagem aprovada: UI cinematica nova sobre os mesmos eventos de dialogo, preservando a janela classica intacta como fallback.
 
 ### Pending Todos
 
@@ -71,20 +79,20 @@ None yet.
 
 ### Blockers/Concerns
 
-- Causa final ainda nao comprovada; Phase 2 deve diferenciar pacote ausente, entidade errada e estado de animacao sobrescrito.
-- Nao ha E2E automatizado para respawn; aceitacao v1 depende de verificacao manual objetiva.
-- Conta/personagem usados no checkpoint da Phase 1 nao foram informados; Phase 2 deve registrar identidade do player de forma objetiva.
+- A feature envolve UI, camera, input e audio; precisa de design antes de implementacao.
+- Deve preservar o dialogo classico atual como fallback.
+- Pitch por letra pode exigir extensao do `korangar-audio`, que hoje expoe `play_sound_effect` sem parametro publico de pitch.
 
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Testes | Smoke/E2E automatizado de login, morte e respawn | v2 | Roadmap v1 |
-| Observabilidade | Tracing permanente ou replay de pacotes | v2 | Roadmap v1 |
-| Arquitetura | Refatorar lifecycle/handlers fora de `main.rs` | v2 | Roadmap v1 |
+| Testes | Smoke/E2E automatizado de login, morte e respawn | Future | Roadmap v1 |
+| Observabilidade | Tracing permanente ou replay de pacotes | Future | Roadmap v1 |
+| Arquitetura | Refatorar lifecycle/handlers fora de `main.rs` | Future | Roadmap v1 |
 
 ## Session Continuity
 
-Last session: 2026-04-27
-Stopped at: Phase 1 complete; next step is planning Phase 2.
+Last session: 2026-04-28
+Stopped at: NPC cinematic dialog brainstorming.
 Resume file: None

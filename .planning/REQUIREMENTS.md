@@ -1,11 +1,34 @@
-# Requirements: Ragnarok Respawn Fix
+# Requirements: Ragnarok Client Modernization
 
 **Defined:** 2026-04-26
-**Core Value:** Depois de `@kill -> Respawn`, o player deve voltar visualmente vivo, com janela de respawn fechada, sem depender de tentativa cega ou workaround nao comprovado.
+**Core Value:** Evoluir o cliente Korangar com melhorias comprovadas, preservando compatibilidade e comportamento existente quando necessario.
+
+## Closed Respawn Diagnostic
+
+O milestone de respawn foi encerrado em 2026-04-28 por informacao do usuario: a causa era falta de registro/tratamento de um pacote desconhecido como evento no cliente. As fases restantes do roadmap antigo foram superseded por essa descoberta e nao devem guiar trabalho novo.
+
+## Active Milestone: NPC Cinematic Dialog
+
+Requirements serao definidos apos a spec de design. Decisoes ja aprovadas:
+
+- [x] A feature deve ser ativada por uma configuracao global em Interface Settings.
+- [x] O dialogo classico existente deve permanecer disponivel quando a opcao estiver desligada ou como fallback.
+- [x] Quando ativa, a feature deve aplicar o modo cinematico a todos os dialogos de NPC.
+- [x] Durante o dialogo cinematico, movimento e controle manual de camera devem ficar temporariamente travados.
+- [x] A camera cinematica deve ser dinamica, entrar sem cortes bruscos e ter configuracao simples de ligar/desligar.
+- [x] O texto cinematico deve usar typewriter, com clique/tecla para revelar a fala inteira antes de avancar.
+- [x] Mouse esquerdo, Enter e Espaco devem revelar/avancar texto no dialogo cinematico.
+- [x] O som por letra deve ter toggle simples ligado/desligado, usando volume de efeitos e pitch automatico.
+- [x] As opcoes de resposta devem aparecer como baloes empilhados acima da caixa de dialogo, centralizados perto da parte inferior.
+- [x] Quando o modo cinematico estiver ativo, a UI cinematica deve substituir visualmente a janela classica de dialogo.
+- [x] A UI cinematica deve ser um caminho novo sobre os mesmos eventos/protocolo, preservando a `DialogWindow` classica como fallback.
+- [x] O typewriter deve iniciar em cerca de 35 caracteres por segundo, com som apenas para caracteres visiveis nao-espaco.
+- [x] O pitch alvo do som por letra deve variar aproximadamente entre 0.94x e 1.06x.
+- [x] O dialogo classico deve ser fallback quando player/NPC ou estado cinematico nao puderem ser resolvidos com seguranca.
 
 ## v1 Requirements
 
-Requirements for the initial fix milestone. Each maps to exactly one roadmap phase.
+Historical requirements for the initial respawn fix milestone. Preserved for context; the milestone is closed by external diagnostic resolution.
 
 ### Reproducao
 

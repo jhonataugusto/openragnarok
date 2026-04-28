@@ -1,0 +1,12 @@
+// Imported by conf/char_athena.conf inside the rathena Docker stack.
+
+// Reach the login-server via the `login` service hostname.
+login_ip: login
+
+// IP advertised to the game client. The client runs on the host, where the
+// char-server is published on 127.0.0.1:6121.
+char_ip: 127.0.0.1
+
+// Skip the pincode prompt so login flow is just user/password.
+pincode_enabled: no
+pincode_force: no

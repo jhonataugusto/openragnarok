@@ -1,0 +1,31 @@
+diff --git a/src/char/char_clif.cpp b/src/char/char_clif.cpp
+index 3abef7f13..f233a79f2 100644
+--- a/src/char/char_clif.cpp
++++ b/src/char/char_clif.cpp
+@@ -83,11 +83,11 @@ int32 chclif_parse_moveCharSlot( int32 fd, struct char_session_data* sd){
+ 	}
+ 
+ 	// Have we changed too often or is it disabled?
+-	if( (charserv_config.charmove_config.char_move_enabled)==0
++	/*if( (charserv_config.charmove_config.char_move_enabled)==0
+ 	|| ( (charserv_config.charmove_config.char_moves_unlimited)==0 && sd->char_moves[from] <= 0 ) ){
+ 		chclif_moveCharSlotReply( fd, sd, from, 1 );
+ 		return 1;
+-	}
++	}*/
+ 
+ 	// Check if there is a character on this slot
+ 	if( sd->found_char[from] <= 0 ){
+@@ -132,10 +132,10 @@ int32 chclif_parse_moveCharSlot( int32 fd, struct char_session_data* sd){
+ 		return 1;
+ 	}
+ 
+-	if( (charserv_config.charmove_config.char_moves_unlimited)==0 ){
++	/*if( (charserv_config.charmove_config.char_moves_unlimited)==0 ){
+ 		sd->char_moves[from]--;
+ 		Sql_Query(sql_handle, "UPDATE `%s` SET `moves`='%d' WHERE `char_id`='%d'", schema_config.char_db, sd->char_moves[from], sd->found_char[from] );
+-	}
++	}*/
+ 
+ 	// We successfully moved the char - time to notify the client
+ 	chclif_moveCharSlotReply( fd, sd, from, 0 );

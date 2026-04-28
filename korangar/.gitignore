@@ -1,0 +1,26 @@
+# Rust
+target/
+
+# Korangar
+korangar/archive/data/font/*
+korangar/client/
+korangar/cache/
+korangar/data.grf
+korangar/rdata.grf
+korangar/lua_files/
+korangar/lua_files.grf
+korangar/[Bb][Gg][Mm]/
+korangar/*.7z
+korangar/packet-trace.log
+korangar/packet-history-export.log
+korangar/respawn-debug.log
+korangar/respawn-network-debug.log
+
+# Nix & direnv
+.direnv/
+
+# macos
+.DS_Store
+
+# Idea
+.idea/

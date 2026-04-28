@@ -1,0 +1,123 @@
+# Top-level rAthena dev stack.
+#
+# Usage from d:\ragnarok\:
+#   docker compose up -d        # build + start everything in the background
+#   docker compose logs -f      # follow logs from every service
+#   docker compose down         # stop (keeps the database volume)
+#   docker compose down -v      # stop AND wipe the database
+#
+# After the first `up`, login with:
+#   user:     admin
+#   password: 123
+#
+# Ports published on the host:
+#   3306 - MariaDB
+#   6900 - login-server
+#   6121 - char-server
+#   5121 - map-server
+
+x-rathena-common: &rathena-common
+  image: rathena:local
+  # Build directive lives only on the `builder` service below to avoid a
+  # buildx race when multiple services target the same image:tag.
+  volumes:
+    # Mount the rAthena source tree so the binaries built inside the container
+    # are visible across the login/char/map services and survive restarts.
+    - ./rathena-master:/rathena
+    # Config overrides copied into /rathena/conf/import/ by entrypoint.sh.
+    - ./docker/import:/docker-import:ro
+  environment:
+    DB_HOST: mariadb
+    DB_PORT: "3306"
+    DB_USER: ragnarok
+    DB_PASS: ragnarok
+    DB_NAME: ragnarok
+    PACKETVER: "20220406"
+  init: true
+
+services:
+  mariadb:
+    image: mariadb:11
+    container_name: rathena-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ragnarok
+      MARIADB_DATABASE: ragnarok
+      MARIADB_USER: ragnarok
+      MARIADB_PASSWORD: ragnarok
+    ports:
+      - "3306:3306"
+    volumes:
+      - rathena-db-data:/var/lib/mysql
+      # rAthena's stock schema + data (main.sql, logs.sql, web.sql, ...).
+      # MariaDB only processes top-level *.sql files; the compatibility/,
+      # tools/, and upgrades/ subdirectories are intentionally ignored.
+      # Note: not :ro because we need to overlay zz-admin.sql below, and
+      # bind-mounting onto a read-only mountpoint fails on Docker Desktop.
+      - ./rathena-master/sql-files:/docker-entrypoint-initdb.d
+      # Overlay the admin seed on top. Named zz-admin.sql so it sorts
+      # AFTER main.sql, web.sql, roulette_default_data.sql, etc.
+      - ./docker/init-db/zz-admin.sql:/docker-entrypoint-initdb.d/zz-admin.sql:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "mariadb -uragnarok -pragnarok -D ragnarok -e 'SELECT 1' >/dev/null 2>&1"
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  builder:
+    <<: *rathena-common
+    build:
+      context: ./docker
+      dockerfile: Dockerfile
+    container_name: rathena-builder
+    command: ["build"]
+    restart: "no"
+
+  login:
+    <<: *rathena-common
+    container_name: rathena-login
+    command: ["login"]
+    restart: unless-stopped
+    ports:
+      - "6900:6900"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      builder:
+        condition: service_completed_successfully
+
+  char:
+    <<: *rathena-common
+    container_name: rathena-char
+    command: ["char"]
+    restart: unless-stopped
+    ports:
+      - "6121:6121"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      builder:
+        condition: service_completed_successfully
+      login:
+        condition: service_started
+
+  map:
+    <<: *rathena-common
+    container_name: rathena-map
+    command: ["map"]
+    restart: unless-stopped
+    ports:
+      - "5121:5121"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      builder:
+        condition: service_completed_successfully
+      char:
+        condition: service_started
+
+volumes:
+  rathena-db-data:

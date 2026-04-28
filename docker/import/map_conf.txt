@@ -1,0 +1,8 @@
+// Imported by conf/map_athena.conf inside the rathena Docker stack.
+
+// Reach the char-server via the `char` service hostname.
+char_ip: char
+
+// IP advertised to the game client. The client runs on the host, where the
+// map-server is published on 127.0.0.1:5121.
+map_ip: 127.0.0.1

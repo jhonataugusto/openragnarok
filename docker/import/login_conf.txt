@@ -1,0 +1,13 @@
+// Imported by conf/login_athena.conf inside the rathena Docker stack.
+//
+// On packetver 20211103 the default minimum username/password length is 6,
+// which would reject the seeded admin account (userid="admin", pass="123").
+// Lower both limits to 1 so the seeded credentials work out of the box.
+acc_name_min_length: 1
+password_min_length: 1
+
+// Plain-text passwords (the seed inserts "123" directly into `login.user_pass`).
+use_MD5_passwords: no
+
+// Disable web auth tokens; the web-server is not part of this minimal stack.
+use_web_auth_token: no

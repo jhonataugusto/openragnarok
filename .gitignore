@@ -41,8 +41,9 @@ korangar/korangar/*.7z
 korangar/korangar/*.exe
 korangar/korangar/*.pdb
 korangar/korangar/*.dll
-korangar/korangar/archive/data/font/*
-korangar/korangar/archive/data/**
+# Assets extraidos do client Korangar
+korangar/korangar/archive/**
+korangar/archive/**
 korangar/korangar/backup/
 
 # rAthena build/runtime

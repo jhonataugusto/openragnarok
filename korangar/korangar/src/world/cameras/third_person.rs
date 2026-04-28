@@ -1,11 +1,16 @@
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rad, Rotation, Rotation3, Vector2, Vector3, Zero};
 
-use super::{Camera, MAXIMUM_CAMERA_DISTANCE, MINIMUM_CAMERA_DISTANCE, SmoothedValue};
+use super::{Camera, SmoothedValue};
 use crate::graphics::perspective_reverse_lh;
+use crate::loaders::GAT_TILE_SIZE;
 
 const ZOOM_SPEED: f32 = 1.0;
 const LOOK_AROUND_SPEED: f32 = 0.005;
-const DEFAULT_DISTANCE: f32 = 180.0;
+const MINIMUM_DISTANCE: f32 = GAT_TILE_SIZE;
+const MAXIMUM_DISTANCE: f32 = GAT_TILE_SIZE * 5.0;
+const DEFAULT_DISTANCE: f32 = GAT_TILE_SIZE * 3.0;
+const MINIMUM_PITCH: f32 = -65_f32.to_radians();
+const MAXIMUM_PITCH: f32 = 65_f32.to_radians();
 const VERTICAL_FOV: Deg<f32> = Deg(45.0);
 const THRESHOLD: f32 = 0.01;
 const LOOK_UP: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
@@ -14,6 +19,8 @@ pub struct ThirdPersonCamera {
     focus_point: Point3<SmoothedValue>,
     camera_position: Point3<f32>,
     orientation: Quaternion<f32>,
+    yaw: f32,
+    pitch: f32,
     camera_distance: SmoothedValue,
     view_matrix: Matrix4<f32>,
     projection_matrix: Matrix4<f32>,
@@ -26,6 +33,8 @@ impl ThirdPersonCamera {
             focus_point: [SmoothedValue::new(0.0, THRESHOLD, 3.0); 3].into(),
             camera_position: Point3::from_value(0.0),
             orientation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            yaw: 0.0,
+            pitch: 0.0,
             camera_distance: SmoothedValue::new(DEFAULT_DISTANCE, THRESHOLD, 4.0),
             view_matrix: Matrix4::zero(),
             projection_matrix: Matrix4::zero(),
@@ -47,13 +56,19 @@ impl ThirdPersonCamera {
 
     pub fn soft_zoom(&mut self, zoom_factor: f32) {
         self.camera_distance
-            .move_desired_clamp(zoom_factor * ZOOM_SPEED, MINIMUM_CAMERA_DISTANCE, MAXIMUM_CAMERA_DISTANCE);
+            .move_desired_clamp(zoom_factor * ZOOM_SPEED, MINIMUM_DISTANCE, MAXIMUM_DISTANCE);
     }
 
     pub fn look_around(&mut self, yaw: f32, pitch: f32) {
-        let pitch = Quaternion::from_axis_angle(Vector3::unit_x(), Rad(-pitch * LOOK_AROUND_SPEED));
-        let yaw = Quaternion::from_axis_angle(Vector3::unit_y(), Rad(-yaw * LOOK_AROUND_SPEED));
-        self.orientation = (yaw * self.orientation * pitch).normalize();
+        self.yaw += yaw * LOOK_AROUND_SPEED;
+        self.pitch = (self.pitch + pitch * LOOK_AROUND_SPEED).clamp(MINIMUM_PITCH, MAXIMUM_PITCH);
+        self.update_orientation();
+    }
+
+    fn update_orientation(&mut self) {
+        let yaw = Quaternion::from_axis_angle(Vector3::unit_y(), Rad(self.yaw));
+        let pitch = Quaternion::from_axis_angle(Vector3::unit_x(), Rad(self.pitch));
+        self.orientation = (yaw * pitch).normalize();
     }
 
     pub fn update(&mut self, delta_time: f64) {
@@ -123,6 +138,47 @@ mod tests {
         camera.set_focus_point(focus_point);
         camera.update(1.0 / 60.0);
 
-        assert_relative_eq!(camera.camera_position().distance(focus_point), 180.0, epsilon = 1e-6);
+        assert_relative_eq!(
+            camera.camera_position().distance(focus_point),
+            GAT_TILE_SIZE * 3.0,
+            epsilon = 1e-6
+        );
+    }
+
+    #[test]
+    fn camera_distance_clamps_between_one_and_five_tiles() {
+        let focus_point = Point3::new(0.0, 0.0, 0.0);
+        let mut camera = ThirdPersonCamera::new();
+        camera.set_focus_point(focus_point);
+
+        camera.soft_zoom(-1000.0);
+        camera.update(1.0);
+        assert_relative_eq!(camera.camera_position().distance(focus_point), GAT_TILE_SIZE, epsilon = 1e-6);
+
+        camera.soft_zoom(1000.0);
+        camera.update(1.0);
+        assert_relative_eq!(
+            camera.camera_position().distance(focus_point),
+            GAT_TILE_SIZE * 5.0,
+            epsilon = 1e-6
+        );
+    }
+
+    #[test]
+    fn positive_yaw_rotates_towards_positive_x() {
+        let mut camera = ThirdPersonCamera::new();
+        camera.look_around(100.0, 0.0);
+
+        assert!(camera.view_direction().x > 0.0);
+    }
+
+    #[test]
+    fn pitch_is_clamped_around_debug_camera_forward() {
+        let mut camera = ThirdPersonCamera::new();
+        camera.look_around(0.0, 10000.0);
+        assert!(camera.view_direction().y.abs() <= MAXIMUM_PITCH.sin() + 0.0001);
+
+        camera.look_around(0.0, -20000.0);
+        assert!(camera.view_direction().y.abs() <= MAXIMUM_PITCH.sin() + 0.0001);
     }
 }

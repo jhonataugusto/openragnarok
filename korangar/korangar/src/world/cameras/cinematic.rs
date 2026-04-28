@@ -5,10 +5,10 @@ use super::{Camera, SmoothedValue};
 use crate::graphics::perspective_reverse_lh;
 
 const THRESHOLD: f32 = 0.01;
-const CAMERA_HEIGHT: f32 = 95.0;
+const CAMERA_HEIGHT: f32 = 18.0;
 const CAMERA_DISTANCE: f32 = 230.0;
 const RIGHT_OFFSET: f32 = 55.0;
-const FOCUS_HEIGHT: f32 = 55.0;
+const FOCUS_HEIGHT: f32 = 12.0;
 const VERTICAL_FOV: Deg<f32> = Deg(18.0);
 const LOOK_UP: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
 
@@ -166,5 +166,22 @@ mod tests {
 
         assert!(north_camera_position.z < player_position.z);
         assert!(east_camera_position.x < player_position.x);
+    }
+
+    #[test]
+    fn camera_stays_near_entity_height() {
+        let player_position = Point3::new(100.0, 0.0, 100.0);
+        let npc_position = Point3::new(120.0, 0.0, 160.0);
+
+        let (camera_position, focus_point) = CinematicCamera::calculate_targets(player_position, npc_position, Direction::North);
+
+        assert_relative_eq!(camera_position.y, player_position.y + CAMERA_HEIGHT, epsilon = 1e-6);
+        assert_relative_eq!(
+            focus_point.y,
+            (player_position.y + npc_position.y) * 0.5 + FOCUS_HEIGHT,
+            epsilon = 1e-6
+        );
+        assert!(camera_position.y < 25.0);
+        assert!(focus_point.y < camera_position.y);
     }
 }

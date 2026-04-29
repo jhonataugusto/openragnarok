@@ -1,4 +1,5 @@
 mod cinematic;
+mod collision;
 #[cfg(feature = "debug")]
 mod debug;
 mod directional_shadow;

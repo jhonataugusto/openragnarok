@@ -1,5 +1,4 @@
-use cgmath::{Deg, InnerSpace, Matrix4, MetricSpace, Point3, Vector2, Vector3, Zero};
-use ragnarok_formats::map::TileFlags;
+use cgmath::{Deg, InnerSpace, Matrix4, Point3, Vector2, Vector3, Zero};
 use ragnarok_packets::Direction;
 
 use super::{Camera, SmoothedValue};
@@ -90,61 +89,19 @@ impl CinematicCamera {
         let desired_camera_position =
             player_position - forward * CAMERA_DISTANCE - right * RIGHT_OFFSET + Vector3::new(0.0, CAMERA_HEIGHT, 0.0);
         let camera_position = map
-            .map(|map| Self::resolve_camera_collision(map, player_position, desired_camera_position))
+            .map(|map| {
+                super::collision::resolve_camera_collision(
+                    map,
+                    player_position,
+                    desired_camera_position,
+                    CAMERA_COLLISION_STEP_LENGTH,
+                    CAMERA_COLLISION_PADDING,
+                    Vector3::new(0.0, CAMERA_HEIGHT, 0.0),
+                )
+            })
             .unwrap_or(desired_camera_position);
 
         (camera_position, focus_point)
-    }
-
-    fn resolve_camera_collision(map: &Map, player_position: Point3<f32>, desired_camera_position: Point3<f32>) -> Point3<f32> {
-        let target_vector = desired_camera_position - player_position;
-        let target_distance = target_vector.magnitude();
-
-        if target_distance <= f32::EPSILON {
-            return desired_camera_position;
-        }
-
-        let target_direction = target_vector / target_distance;
-        let adjusted_target_distance = map
-            .first_object_intersection_fraction(player_position, desired_camera_position, CAMERA_COLLISION_PADDING)
-            .map(|fraction| (target_distance * fraction - CAMERA_COLLISION_PADDING).max(0.0))
-            .unwrap_or(target_distance);
-        let steps = (adjusted_target_distance / CAMERA_COLLISION_STEP_LENGTH).ceil().max(1.0) as usize;
-        let mut last_clear_position = None;
-
-        for step in 1..=steps {
-            let distance = (step as f32 * CAMERA_COLLISION_STEP_LENGTH).min(adjusted_target_distance);
-            let sample_position = player_position + target_direction * distance;
-
-            if Self::is_camera_position_clear(map, sample_position) {
-                last_clear_position = Some(sample_position);
-                continue;
-            }
-
-            return last_clear_position
-                .map(|position| {
-                    let padded_distance = (player_position.distance(position) - CAMERA_COLLISION_PADDING).max(0.0);
-                    player_position + target_direction * padded_distance
-                })
-                .unwrap_or(player_position + Vector3::new(0.0, CAMERA_HEIGHT, 0.0));
-        }
-
-        player_position + target_direction * adjusted_target_distance
-    }
-
-    fn is_camera_position_clear(map: &Map, position: Point3<f32>) -> bool {
-        if position.x < 0.0 || position.z < 0.0 {
-            return false;
-        }
-
-        let tile_position = ragnarok_packets::TilePosition {
-            x: (position.x / GAT_TILE_SIZE).floor() as u16,
-            y: (position.z / GAT_TILE_SIZE).floor() as u16,
-        };
-
-        map.get_tile(tile_position)
-            .map(|tile| tile.flags.contains(TileFlags::WALKABLE) && tile.flags.contains(TileFlags::SNIPABLE))
-            .unwrap_or(false)
     }
 
     fn update_view_direction(&mut self) {

@@ -3160,7 +3160,7 @@ impl Client {
             if self.client_state.try_follow(this_entity()).is_some() {
                 self.player_camera.update(delta_time);
                 self.player_camera.generate_view_projection(window_size);
-                self.third_person_camera.update(delta_time);
+                self.third_person_camera.update(delta_time, self.map.as_deref());
                 self.third_person_camera.generate_view_projection(window_size);
             } else {
                 self.start_camera.update(delta_time);

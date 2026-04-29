@@ -306,6 +306,19 @@ impl Map {
         ))
     }
 
+    pub fn get_ground_height_at_world_position(&self, position: Point3<f32>) -> Option<f32> {
+        if position.x < 0.0 || position.z < 0.0 {
+            return None;
+        }
+
+        let tile_position = TilePosition {
+            x: (position.x / GAT_TILE_SIZE).floor() as u16,
+            y: (position.z / GAT_TILE_SIZE).floor() as u16,
+        };
+
+        self.get_tile(tile_position).map(Self::average_tile_height)
+    }
+
     pub fn get_tile(&self, position: TilePosition) -> Option<&Tile> {
         self.tiles.get(position.x as usize + position.y as usize * self.width as usize)
     }

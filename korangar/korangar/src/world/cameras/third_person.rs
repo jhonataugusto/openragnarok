@@ -3,6 +3,7 @@ use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rad, Rotation,
 use super::{Camera, SmoothedValue};
 use crate::graphics::perspective_reverse_lh;
 use crate::loaders::GAT_TILE_SIZE;
+use crate::world::Map;
 
 const ZOOM_SPEED: f32 = 1.0;
 const LOOK_AROUND_SPEED: f32 = 0.005;
@@ -12,6 +13,7 @@ const DEFAULT_DISTANCE: f32 = GAT_TILE_SIZE * 10.0;
 const MINIMUM_PITCH: f32 = -65_f32.to_radians();
 const MAXIMUM_PITCH: f32 = 65_f32.to_radians();
 const HEIGHT_OFFSET: f32 = GAT_TILE_SIZE;
+const GROUND_CLEARANCE: f32 = GAT_TILE_SIZE * 0.5;
 const VERTICAL_FOV: Deg<f32> = Deg(45.0);
 const THRESHOLD: f32 = 0.01;
 const LOOK_UP: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
@@ -72,14 +74,19 @@ impl ThirdPersonCamera {
         self.orientation = (yaw * pitch).normalize();
     }
 
-    pub fn update(&mut self, delta_time: f64) {
+    pub fn update(&mut self, delta_time: f64, map: Option<&Map>) {
         self.focus_point.x.update(delta_time);
         self.focus_point.y.update(delta_time);
         self.focus_point.z.update(delta_time);
         self.camera_distance.update(delta_time);
 
         let view_distance = self.camera_distance.get_current();
-        self.camera_position = self.focus_point() + Vector3::unit_y() * HEIGHT_OFFSET - self.view_direction() * view_distance;
+        let anchor_position = self.focus_point() + Vector3::unit_y() * HEIGHT_OFFSET;
+        let desired_camera_position = anchor_position - self.view_direction() * view_distance;
+        let ground_height = map.and_then(|map| map.get_ground_height_at_world_position(desired_camera_position));
+        let ground_contact_offset =
+            super::collision::required_ground_contact_offset(desired_camera_position.y, ground_height, GROUND_CLEARANCE);
+        self.camera_position = desired_camera_position + Vector3::unit_y() * ground_contact_offset;
     }
 }
 
@@ -126,7 +133,7 @@ mod tests {
     fn default_orientation_matches_debug_camera_forward() {
         let mut camera = ThirdPersonCamera::new();
         camera.set_focus_point(Point3::new(0.0, 0.0, 0.0));
-        camera.update(1.0 / 60.0);
+        camera.update(1.0 / 60.0, None);
 
         assert_relative_eq!(camera.view_direction(), Vector3::unit_z(), epsilon = 1e-6);
         assert!(camera.camera_position().z < 0.0);
@@ -137,7 +144,7 @@ mod tests {
         let focus_point = Point3::new(20.0, 7.0, 30.0);
         let mut camera = ThirdPersonCamera::new();
         camera.set_focus_point(focus_point);
-        camera.update(1.0 / 60.0);
+        camera.update(1.0 / 60.0, None);
 
         assert_relative_eq!(camera.camera_position().y, focus_point.y + GAT_TILE_SIZE, epsilon = 1e-6);
     }
@@ -147,7 +154,7 @@ mod tests {
         let focus_point = Point3::new(0.0, 0.0, 0.0);
         let mut camera = ThirdPersonCamera::new();
         camera.set_focus_point(focus_point);
-        camera.update(1.0 / 60.0);
+        camera.update(1.0 / 60.0, None);
         let camera_offset = camera.camera_position() - focus_point;
 
         assert_relative_eq!(
@@ -164,7 +171,7 @@ mod tests {
         camera.set_focus_point(focus_point);
 
         camera.soft_zoom(-1000.0);
-        camera.update(1.0);
+        camera.update(1.0, None);
         let camera_offset = camera.camera_position() - focus_point;
         assert_relative_eq!(
             Vector2::new(camera_offset.x, camera_offset.z).magnitude(),
@@ -173,7 +180,7 @@ mod tests {
         );
 
         camera.soft_zoom(1000.0);
-        camera.update(1.0);
+        camera.update(1.0, None);
         let camera_offset = camera.camera_position() - focus_point;
         assert_relative_eq!(
             Vector2::new(camera_offset.x, camera_offset.z).magnitude(),
@@ -198,5 +205,23 @@ mod tests {
 
         camera.look_around(0.0, -20000.0);
         assert!(camera.view_direction().y.abs() <= MAXIMUM_PITCH.sin() + 0.0001);
+    }
+
+    #[test]
+    fn ground_contact_offset_is_zero_when_camera_is_above_ground() {
+        assert_relative_eq!(
+            super::super::collision::required_ground_contact_offset(30.0, Some(20.0), 5.0),
+            0.0,
+            epsilon = 1e-6
+        );
+    }
+
+    #[test]
+    fn ground_contact_offset_uses_clearance_only_when_terrain_touches_camera() {
+        assert_relative_eq!(
+            super::super::collision::required_ground_contact_offset(18.0, Some(20.0), 5.0),
+            7.0,
+            epsilon = 1e-6
+        );
     }
 }

@@ -80,6 +80,28 @@ mod tests {
 
         assert_eq!(animation_state.duration, Some(1));
     }
+
+    #[test]
+    fn attack_can_recover_to_ready_fight() {
+        let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
+
+        animation_state.attack_with_recovery(EntityType::Player, 150, false, true, ClientTick(10));
+        animation_state.recover_finished_action(EntityType::Player, ClientTick(160));
+
+        assert_eq!(animation_state.action_type, AnimationActionType::ReadyFight);
+        assert!(animation_state.looping);
+    }
+
+    #[test]
+    fn attack_recovers_to_idle_by_default() {
+        let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
+
+        animation_state.attack(EntityType::Player, 150, false, ClientTick(10));
+        animation_state.recover_finished_action(EntityType::Player, ClientTick(160));
+
+        assert_eq!(animation_state.action_type, AnimationActionType::Idle);
+        assert!(animation_state.looping);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -91,6 +113,7 @@ pub struct AnimationState {
     duration: Option<u32>,
     factor: Option<f32>,
     looping: bool,
+    recover_to_ready_fight: bool,
 }
 
 impl AnimationState {
@@ -104,6 +127,7 @@ impl AnimationState {
             duration: None,
             factor: None,
             looping: true,
+            recover_to_ready_fight: false,
         }
     }
 
@@ -114,9 +138,21 @@ impl AnimationState {
         self.duration = None;
         self.factor = None;
         self.looping = true;
+        self.recover_to_ready_fight = false;
     }
 
     pub fn attack(&mut self, entity_type: EntityType, attack_duration: u32, critical: bool, client_tick: ClientTick) {
+        self.attack_with_recovery(entity_type, attack_duration, critical, false, client_tick);
+    }
+
+    pub fn attack_with_recovery(
+        &mut self,
+        entity_type: EntityType,
+        attack_duration: u32,
+        critical: bool,
+        recover_to_ready_fight: bool,
+        client_tick: ClientTick,
+    ) {
         self.action_type = match critical {
             true => AnimationActionType::Attack3,
             false => AnimationActionType::Attack1,
@@ -126,6 +162,7 @@ impl AnimationState {
         self.duration = Some(attack_duration.max(1));
         self.factor = None;
         self.looping = false;
+        self.recover_to_ready_fight = recover_to_ready_fight;
     }
 
     pub fn pickup(&mut self, entity_type: EntityType, client_tick: ClientTick) {
@@ -135,6 +172,7 @@ impl AnimationState {
         self.duration = None;
         self.factor = Some(PICKUP_ANIMATION_FACTOR);
         self.looping = false;
+        self.recover_to_ready_fight = false;
     }
 
     pub fn walk(&mut self, entity_type: EntityType, movement_speed: usize, client_tick: ClientTick) {
@@ -144,6 +182,7 @@ impl AnimationState {
         self.duration = None;
         self.factor = Some(movement_speed as f32 * 100.0 / 150.0 / 5.0);
         self.looping = true;
+        self.recover_to_ready_fight = false;
     }
 
     pub fn dead(&mut self, entity_type: EntityType, client_tick: ClientTick) {
@@ -153,6 +192,25 @@ impl AnimationState {
         self.duration = None;
         self.factor = None;
         self.looping = false;
+        self.recover_to_ready_fight = false;
+    }
+
+    pub fn ready_fight(&mut self, entity_type: EntityType, client_tick: ClientTick) {
+        self.action_type = AnimationActionType::ReadyFight;
+        self.action_base_offset = self.action_type.action_base_offset(entity_type);
+        self.start_time = client_tick;
+        self.duration = None;
+        self.factor = None;
+        self.looping = true;
+        self.recover_to_ready_fight = false;
+    }
+
+    pub fn recover_finished_action(&mut self, entity_type: EntityType, client_tick: ClientTick) {
+        if self.is_attack() && self.recover_to_ready_fight {
+            self.ready_fight(entity_type, client_tick);
+        } else {
+            self.idle(entity_type, client_tick);
+        }
     }
 
     pub fn is_attack(&self) -> bool {

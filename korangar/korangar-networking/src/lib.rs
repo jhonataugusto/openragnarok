@@ -92,6 +92,13 @@ pub struct NetworkingSystem<Callback> {
     packet_callback: Callback,
 }
 
+fn attack_action_for_auto_attack(auto_attack: bool) -> Action {
+    match auto_attack {
+        true => Action::ContinousAttack,
+        false => Action::Attack,
+    }
+}
+
 impl NetworkingSystem<NoPacketCallback> {
     pub fn spawn() -> (Self, NetworkEventBuffer) {
         let (command_sender, time_synchronization) = Self::spawn_networking_thread(NoPacketCallback);
@@ -720,9 +727,11 @@ where
         }
     }
 
-    pub fn player_attack(&mut self, entity_id: EntityId) -> Result<(), NotConnectedError> {
+    pub fn player_attack(&mut self, entity_id: EntityId, auto_attack: bool) -> Result<(), NotConnectedError> {
         match self.map_server_packet_version()? {
-            SupportedPacketVersion::_20220406 => self.send_map_server_packet(RequestActionPacket::new(entity_id, Action::Attack)),
+            SupportedPacketVersion::_20220406 => {
+                self.send_map_server_packet(RequestActionPacket::new(entity_id, attack_action_for_auto_attack(auto_attack)))
+            }
         }
     }
 
@@ -917,5 +926,21 @@ mod packet_handlers {
     fn map_server() {
         let result = NetworkingSystem::create_map_server_packet_handler(NoPacketCallback, SupportedPacketVersion::_20220406);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn auto_attack_uses_continuous_attack_action() {
+        assert!(matches!(
+            crate::attack_action_for_auto_attack(true),
+            ragnarok_packets::Action::ContinousAttack
+        ));
+    }
+
+    #[test]
+    fn single_attack_uses_normal_attack_action() {
+        assert!(matches!(
+            crate::attack_action_for_auto_attack(false),
+            ragnarok_packets::Action::Attack
+        ));
     }
 }

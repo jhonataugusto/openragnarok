@@ -608,7 +608,7 @@ impl Common {
             if animation_data.is_animation_over(&self.animation_state)
                 && (self.animation_state.is_attack() || self.animation_state.is_pickup())
             {
-                self.animation_state.idle(self.entity_type, client_tick);
+                self.animation_state.recover_finished_action(self.entity_type, client_tick);
             }
 
             let frame = animation_data.get_frame(&self.animation_state, camera, self.direction);
@@ -1537,6 +1537,13 @@ impl Entity {
         self.get_common_mut()
             .animation_state
             .attack(entity_type, attack_duration, critical, client_tick);
+    }
+
+    pub fn set_attack_recovering_to_ready_fight(&mut self, attack_duration: u32, critical: bool, client_tick: ClientTick) {
+        let entity_type = self.get_entity_type();
+        self.get_common_mut()
+            .animation_state
+            .attack_with_recovery(entity_type, attack_duration, critical, true, client_tick);
     }
 
     pub fn stopped_moving(&self) -> bool {

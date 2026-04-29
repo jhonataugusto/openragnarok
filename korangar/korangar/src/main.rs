@@ -1710,13 +1710,23 @@ impl Client {
                         let buffered_action = self.client_state.follow_mut(client_state().buffered_action());
 
                         if let Some(BufferedAction::AttackEntity { entity_id }) = *buffered_action {
-                            let _ = self.networking_system.player_attack(entity_id);
+                            let _ = self.networking_system.player_attack(entity_id, auto_attack);
 
                             if !auto_attack {
                                 *buffered_action = None;
                             }
                         }
                     }
+
+                    let recover_to_ready_fight = self
+                        .client_state
+                        .try_follow(this_entity())
+                        .is_some_and(|player| player.get_entity_id() == source_entity_id)
+                        && self
+                            .client_state
+                            .follow(client_state().buffered_action())
+                            .as_ref()
+                            .is_some_and(|action| action.is_attack_entity(destination_entity_id));
 
                     if let Some(entity) = self
                         .client_state
@@ -1729,7 +1739,11 @@ impl Client {
                             entity.rotate_towards(target_position);
                         }
 
-                        entity.set_attack(attack_duration, is_critical, client_tick);
+                        if recover_to_ready_fight {
+                            entity.set_attack_recovering_to_ready_fight(attack_duration, is_critical, client_tick);
+                        } else {
+                            entity.set_attack(attack_duration, is_critical, client_tick);
+                        }
                     }
 
                     if let Some(entity) = self
@@ -2539,7 +2553,7 @@ impl Client {
                                     *buffered_action = Some(BufferedAction::AttackEntity { entity_id });
                                 }
 
-                                self.networking_system.player_attack(entity_id)
+                                self.networking_system.player_attack(entity_id, auto_attack)
                             }
                             EntityType::Warp => self.networking_system.player_move({
                                 let position = entity.get_tile_position();
@@ -3283,7 +3297,7 @@ impl Client {
                     if let Some(buffered_action) = buffered_action {
                         match buffered_action {
                             BufferedAction::AttackEntity { entity_id } => {
-                                let _ = self.networking_system.player_attack(entity_id);
+                                let _ = self.networking_system.player_attack(entity_id, auto_attack);
 
                                 if auto_attack {
                                     *self.client_state.follow_mut(client_state().buffered_action()) =

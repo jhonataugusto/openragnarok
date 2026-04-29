@@ -463,15 +463,28 @@ mod tests {
     }
 
     #[test]
-    fn movement_offset_uses_camera_forward_direction() {
+    fn movement_offset_uses_one_tile_for_tap_movement() {
         let keys = MovementKeyState {
             forward: true,
             ..Default::default()
         };
 
         assert_eq!(
-            tile_offset_for_camera_movement(keys, Vector3::new(0.0, -0.5, 1.0), 5),
-            Some((0, 5))
+            tile_offset_for_camera_movement(keys, Vector3::new(0.0, -0.5, 1.0), 1),
+            Some((0, 1))
+        );
+    }
+
+    #[test]
+    fn movement_offset_uses_four_tiles_for_held_movement() {
+        let keys = MovementKeyState {
+            forward: true,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            tile_offset_for_camera_movement(keys, Vector3::new(0.0, -0.5, 1.0), 4),
+            Some((0, 4))
         );
     }
 
@@ -484,8 +497,8 @@ mod tests {
         };
 
         assert_eq!(
-            tile_offset_for_camera_movement(keys, Vector3::new(0.0, -0.5, 1.0), 5),
-            Some((-4, 4))
+            tile_offset_for_camera_movement(keys, Vector3::new(0.0, -0.5, 1.0), 4),
+            Some((-3, 3))
         );
     }
 }

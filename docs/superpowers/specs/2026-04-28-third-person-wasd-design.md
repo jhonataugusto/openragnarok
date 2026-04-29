@@ -56,13 +56,11 @@ Enquanto o modo estiver ativo, `W/A/S/D` deve gerar `InputEvent::PlayerMove { de
 
 Regras:
 
-- `W`: 5 tiles para frente em relação à direção horizontal da câmera.
-- `S`: 5 tiles para trás.
-- `A`: 5 tiles para esquerda.
-- `D`: 5 tiles para direita.
-- Combinações diagonais normalizam o vetor antes de calcular o destino, mantendo alvo de 5 tiles em vez de somar distâncias.
+- Toque inicial em `W/A/S/D`: 1 tile em relação à direção horizontal da câmera.
+- Depois de 100ms segurando `W/A/S/D`: 4 tiles em relação à direção horizontal da câmera.
+- Combinações diagonais normalizam o vetor antes de calcular o destino, mantendo o alvo curto proporcional em vez de somar distâncias.
 - O primeiro envio acontece imediatamente quando uma tecla de movimento começa a ser pressionada.
-- Enquanto a tecla continua segurada, novos destinos são enviados de forma adaptativa: imediatamente no primeiro envio, depois somente se o destino mudou e ao menos 40ms se passaram.
+- Enquanto a tecla continua segurada, novos destinos são enviados de forma adaptativa: depois somente se o destino mudou e ao menos 150ms se passaram.
 - Ao soltar todas as teclas de movimento, o cliente não envia pacote de parada; apenas para de gerar novos destinos.
 - O player segue até o último destino aceito pelo servidor, como acontece ao parar de segurar o clique do mouse.
 - Se a câmera girar enquanto uma tecla está segurada, o próximo envio após o throttle usa a nova direção da câmera.
@@ -108,7 +106,7 @@ O bloqueio é específico para movimento por clique no chão. Devem continuar fu
 Validação manual mínima:
 
 1. Com a opção desligada, o movimento por clique e a câmera clássica continuam como antes.
-2. Com a opção ligada, segurar `W` faz o player continuar recebendo destinos de 5 tiles na direção da câmera em intervalo mínimo de 40ms quando o destino muda.
+2. Com a opção ligada, tocar `W` gera destino de 1 tile; segurar por 100ms passa a gerar destinos de 4 tiles.
 3. Soltar `W` faz o player parar de receber novos destinos e terminar no último destino.
 4. `W+A` e outras diagonais funcionam sem distância exagerada.
 5. Girar a câmera com botão direito enquanto anda muda os próximos destinos.
@@ -118,7 +116,7 @@ Validação manual mínima:
 Testes automatizados desejáveis:
 
 - unidade para conversão de input WASD + direção da câmera em vetor de tile;
-- unidade para intervalo adaptativo mínimo de 40ms;
+- unidade para toque de 1 tile, segurada de 4 tiles e intervalo adaptativo mínimo de 150ms;
 - unidade para configuração antiga carregar com `third_person_movement_enabled = false`.
 
 ## Decisões
@@ -128,4 +126,4 @@ Testes automatizados desejáveis:
 - A câmera não controla a rotação do player como volante.
 - O clique no chão é o único fluxo bloqueado para não enviar movimento ao servidor.
 - Diagonal é suportada e normalizada.
-- O movimento segurado usa envio adaptativo com intervalo mínimo de 40ms.
+- O movimento segurado usa envio adaptativo com intervalo mínimo de 150ms.

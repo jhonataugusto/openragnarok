@@ -132,8 +132,10 @@ const DEFAULT_BACKGROUND_MUSIC: Option<&str> = Some("bgm\\01.mp3");
 const MAIN_MENU_CLICK_SOUND_EFFECT: &str = "버튼소리.wav";
 const CINEMATIC_DIALOG_TEXT_SOUND_EFFECT: &str = MAIN_MENU_CLICK_SOUND_EFFECT;
 const ITEM_PICKUP_RANGE: AttackRange = AttackRange(1);
-const THIRD_PERSON_MOVEMENT_TILE_DISTANCE: i16 = 5;
-const THIRD_PERSON_MOVEMENT_THROTTLE_MS: u32 = 40;
+const THIRD_PERSON_TAP_TILE_DISTANCE: i16 = 1;
+const THIRD_PERSON_HOLD_TILE_DISTANCE: i16 = 4;
+const THIRD_PERSON_HOLD_THRESHOLD_MS: u32 = 100;
+const THIRD_PERSON_MOVEMENT_THROTTLE_MS: u32 = 150;
 // TODO: The number of point lights that can cast shadows should be configurable
 // through the graphics settings. For now I just chose an arbitrary smaller
 // number that should be playable on most devices.
@@ -357,15 +359,33 @@ struct Client {
 struct ThirdPersonMovementState {
     last_sent_at: Option<ClientTick>,
     last_destination: Option<TilePosition>,
+    movement_started_at: Option<ClientTick>,
     was_moving: bool,
 }
 
 impl ThirdPersonMovementState {
+    fn tile_distance(&mut self, moving: bool, client_tick: ClientTick) -> Option<i16> {
+        if !moving {
+            self.reset();
+            return None;
+        }
+
+        let movement_started_at = *self.movement_started_at.get_or_insert(client_tick);
+        let held_duration = client_tick.0.wrapping_sub(movement_started_at.0);
+
+        Some(if held_duration >= THIRD_PERSON_HOLD_THRESHOLD_MS {
+            THIRD_PERSON_HOLD_TILE_DISTANCE
+        } else {
+            THIRD_PERSON_TAP_TILE_DISTANCE
+        })
+    }
+
     fn should_send(&mut self, moving: bool, destination: Option<TilePosition>, client_tick: ClientTick) -> bool {
         if !moving {
             self.was_moving = false;
             self.last_sent_at = None;
             self.last_destination = None;
+            self.movement_started_at = None;
             return false;
         }
 
@@ -395,6 +415,7 @@ impl ThirdPersonMovementState {
         self.was_moving = false;
         self.last_sent_at = None;
         self.last_destination = None;
+        self.movement_started_at = None;
     }
 }
 
@@ -402,17 +423,35 @@ impl ThirdPersonMovementState {
 mod third_person_movement_tests {
     use ragnarok_packets::{ClientTick, TilePosition};
 
-    use super::ThirdPersonMovementState;
+    use super::{THIRD_PERSON_HOLD_TILE_DISTANCE, THIRD_PERSON_TAP_TILE_DISTANCE, ThirdPersonMovementState};
 
     #[test]
-    fn movement_state_sends_adaptively_after_40ms_when_destination_changes() {
+    fn movement_state_sends_adaptively_after_150ms_when_destination_changes() {
         let mut state = ThirdPersonMovementState::default();
         let first_destination = TilePosition { x: 10, y: 10 };
         let second_destination = TilePosition { x: 11, y: 10 };
 
         assert!(state.should_send(true, Some(first_destination), ClientTick(1000)));
-        assert!(!state.should_send(true, Some(second_destination), ClientTick(1039)));
-        assert!(state.should_send(true, Some(second_destination), ClientTick(1040)));
+        assert!(!state.should_send(true, Some(second_destination), ClientTick(1149)));
+        assert!(state.should_send(true, Some(second_destination), ClientTick(1150)));
+    }
+
+    #[test]
+    fn movement_state_uses_one_tile_until_key_is_held_for_100ms() {
+        let mut state = ThirdPersonMovementState::default();
+
+        assert_eq!(
+            state.tile_distance(true, ClientTick(1000)),
+            Some(THIRD_PERSON_TAP_TILE_DISTANCE)
+        );
+        assert_eq!(
+            state.tile_distance(true, ClientTick(1099)),
+            Some(THIRD_PERSON_TAP_TILE_DISTANCE)
+        );
+        assert_eq!(
+            state.tile_distance(true, ClientTick(1100)),
+            Some(THIRD_PERSON_HOLD_TILE_DISTANCE)
+        );
     }
 }
 
@@ -457,14 +496,13 @@ impl Client {
     fn queue_third_person_movement(&mut self, client_tick: ClientTick) {
         let movement_keys = self.input_system.movement_key_state();
         let moving = movement_keys.has_movement();
+        let tile_distance = self.third_person_movement.tile_distance(moving, client_tick);
         let destination = moving
             .then(|| {
                 let player_position = self.client_state.try_follow(this_entity())?.get_tile_position();
-                let (offset_x, offset_y) = tile_offset_for_camera_movement(
-                    movement_keys,
-                    self.third_person_camera.view_direction(),
-                    THIRD_PERSON_MOVEMENT_TILE_DISTANCE,
-                )?;
+                let tile_distance = tile_distance?;
+                let (offset_x, offset_y) =
+                    tile_offset_for_camera_movement(movement_keys, self.third_person_camera.view_direction(), tile_distance)?;
                 let destination = TilePosition {
                     x: player_position.x.checked_add_signed(offset_x)?,
                     y: player_position.y.checked_add_signed(offset_y)?,

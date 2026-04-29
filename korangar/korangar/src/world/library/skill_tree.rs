@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use hashbrown::HashMap;
 use mlua::Lua;
 use ragnarok_packets::{JobId, SkillId};
@@ -156,6 +158,43 @@ impl Table for SkillTreeLayout {
     where
         Self: Sized,
     {
-        Self::try_get(library, key).unwrap()
+        static EMPTY_LAYOUT: LazyLock<SkillTreeLayout> = LazyLock::new(SkillTreeLayout::default);
+
+        Self::try_get(library, key)
+            .or_else(|| Self::try_get(library, JobId(0)))
+            .unwrap_or(&EMPTY_LAYOUT)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn library_with_skill_tree_table(skill_tree_table: <SkillTreeLayout as Table>::Storage) -> Library {
+        Library {
+            job_identity_table: HashMap::new(),
+            item_info_table: HashMap::new(),
+            map_sky_data_table: HashMap::new(),
+            skill_information_table: HashMap::new(),
+            skill_requirements_table: HashMap::new(),
+            skill_tree_table,
+            baby_job_table: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn missing_job_uses_novice_skill_tree_layout() {
+        let novice_layout = SkillTreeLayout {
+            tabs: vec![SkillTabLayout {
+                name: "Novice".to_owned(),
+                skills: HashMap::from_iter([(1, SkillId(142))]),
+            }],
+        };
+        let library = library_with_skill_tree_table(HashMap::from_iter([(JobId(0), novice_layout)]));
+
+        let layout = SkillTreeLayout::get(&library, JobId(9999));
+
+        assert_eq!(layout.tabs[0].name, "Novice");
+        assert_eq!(layout.tabs[0].skills.get(&1), Some(&SkillId(142)));
     }
 }

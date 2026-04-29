@@ -760,7 +760,7 @@ impl GraphicsEngine {
     }
 
     #[cfg_attr(feature = "debug", korangar_debug::profile)]
-    pub fn wait_for_next_frame(&mut self) -> Option<SurfaceTexture> {
+    pub fn begin_next_frame(&mut self) {
         // Before we wait for the next frame, we verify that the surface is still valid.
         if let Some(surface) = self.surface.as_mut()
             && surface.is_invalid()
@@ -809,7 +809,10 @@ impl GraphicsEngine {
             self.frame_pacer.wait_for_frame();
         }
         self.frame_pacer.begin_frame_stage(self.cpu_stage, Instant::now());
+    }
 
+    #[cfg_attr(feature = "debug", korangar_debug::profile)]
+    pub fn acquire_next_frame(&mut self) -> Option<SurfaceTexture> {
         self.surface.as_mut().expect("surface not set").acquire()
     }
 

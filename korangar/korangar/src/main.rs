@@ -128,10 +128,6 @@ const CLIENT_NAME: &str = "Korangar";
 const ROLLING_CUTTER_ID: SkillId = SkillId(2036);
 const DEFAULT_MAP: &str = "geffen";
 const START_CAMERA_FOCUS_POINT: Point3<f32> = Point3::new(600.0, 0.0, 240.0);
-const DEFAULT_SKYBOX_FOG_COLOR: Color = Color::rgb_u8(169, 186, 197);
-const DEFAULT_SKYBOX_FOG_START: f32 = 220.0;
-const DEFAULT_SKYBOX_FOG_END: f32 = 720.0;
-const DEFAULT_SKYBOX_FOG_DENSITY: f32 = 0.42;
 const DEFAULT_BACKGROUND_MUSIC: Option<&str> = Some("bgm\\01.mp3");
 const MAIN_MENU_CLICK_SOUND_EFFECT: &str = "버튼소리.wav";
 const CINEMATIC_DIALOG_TEXT_SOUND_EFFECT: &str = MAIN_MENU_CLICK_SOUND_EFFECT;
@@ -152,6 +148,10 @@ const INITIAL_SCREEN_SIZE: ScreenSize = ScreenSize {
 
 const INITIAL_SCALING_FACTOR: Scaling = Scaling::new(1.0);
 const FALLBACK_PACKET_VERSION: SupportedPacketVersion = SupportedPacketVersion::_20220406;
+
+const fn default_skybox_fog_instruction() -> FogInstruction {
+    FogInstruction::disabled()
+}
 
 static ICON_DATA: &[u8] = include_bytes!("../archive/data/icon.png");
 
@@ -427,7 +427,17 @@ impl ThirdPersonMovementState {
 mod third_person_movement_tests {
     use ragnarok_packets::{ClientTick, TilePosition};
 
-    use super::{THIRD_PERSON_HOLD_TILE_DISTANCE, THIRD_PERSON_TAP_TILE_DISTANCE, ThirdPersonMovementState};
+    use super::{
+        THIRD_PERSON_HOLD_TILE_DISTANCE, THIRD_PERSON_TAP_TILE_DISTANCE, ThirdPersonMovementState, default_skybox_fog_instruction,
+    };
+
+    #[test]
+    fn default_skybox_fog_is_disabled() {
+        let fog = default_skybox_fog_instruction();
+
+        assert!(!fog.enabled);
+        assert_eq!(fog.density, 0.0);
+    }
 
     #[test]
     fn movement_state_sends_adaptively_after_150ms_when_destination_changes() {
@@ -4025,13 +4035,7 @@ impl Client {
                     shadow_detail,
                     use_sdsm,
                     sdsm_enabled,
-                    fog: FogInstruction {
-                        enabled: true,
-                        color: DEFAULT_SKYBOX_FOG_COLOR,
-                        start: DEFAULT_SKYBOX_FOG_START,
-                        end: DEFAULT_SKYBOX_FOG_END,
-                        density: DEFAULT_SKYBOX_FOG_DENSITY,
-                    },
+                    fog: default_skybox_fog_instruction(),
                 },
                 skybox: SkyboxInstruction { enabled: true },
                 indicator: indicator_instruction,

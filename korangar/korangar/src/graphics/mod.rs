@@ -67,6 +67,17 @@ pub const RENDER_TO_TEXTURE_DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32
 pub const INTERFACE_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
 pub const FXAA_COLOR_LUMA_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
 
+const SKYDOME_TEXTURE_WIDTH_FACTOR: u32 = 2;
+const DEFAULT_SKYBOX_TEXTURE_PATH: &str = "skybox\\day.png";
+
+const fn default_skybox_texture_path() -> &'static str {
+    DEFAULT_SKYBOX_TEXTURE_PATH
+}
+
+const fn is_skydome_texture_size(width: u32, height: u32) -> bool {
+    height > 0 && width == height * SKYDOME_TEXTURE_WIDTH_FACTOR
+}
+
 /// Trait to prepare all GPU data of contexts, computer and renderer.
 pub(crate) trait Prepare {
     /// Prepares the GPU data.
@@ -665,27 +676,7 @@ impl GlobalContext {
             RgbaImage::from_raw(1, 1, vec![255, 255, 255, 255]).unwrap().as_raw(),
             false,
         ));
-        let skybox_texture = Arc::new(Texture::new_with_data(
-            device,
-            queue,
-            &TextureDescriptor {
-                label: Some("default skybox gradient"),
-                size: Extent3d {
-                    width: 1,
-                    height: 2,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: TextureDimension::D2,
-                format: TextureFormat::Rgba8UnormSrgb,
-                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
-                view_formats: Default::default(),
-            },
-            // Top pixel first, horizon pixel second.
-            &[96, 151, 205, 255, 223, 214, 183, 255],
-            false,
-        ));
+        let skybox_texture = Self::load_skybox_texture(device, queue, texture_loader);
         let walk_indicator_texture = texture_loader.get_or_load("grid.tga", ImageType::Color).unwrap();
         let forward_textures = Self::create_forward_textures(device, forward_size, msaa);
         let picker_textures = Self::create_picker_textures(device, screen_size);
@@ -906,6 +897,63 @@ impl GlobalContext {
 
     fn get_forward_texture(&self) -> &AttachmentTexture {
         self.resolved_color_texture.as_ref().unwrap_or(&self.forward_color_texture)
+    }
+
+    fn create_fallback_skybox_texture(device: &Device, queue: &Queue) -> Arc<Texture> {
+        Arc::new(Texture::new_with_data(
+            device,
+            queue,
+            &TextureDescriptor {
+                label: Some("fallback skydome texture"),
+                size: Extent3d {
+                    width: SKYDOME_TEXTURE_WIDTH_FACTOR,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba8UnormSrgb,
+                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+                view_formats: Default::default(),
+            },
+            &[96, 151, 205, 255, 96, 151, 205, 255],
+            false,
+        ))
+    }
+
+    fn load_skybox_texture(device: &Device, queue: &Queue, texture_loader: &TextureLoader) -> Arc<Texture> {
+        let Ok((image, transparent)) = texture_loader.load_texture_data(default_skybox_texture_path(), false) else {
+            return Self::create_fallback_skybox_texture(device, queue);
+        };
+
+        let width = image.width();
+        let height = image.height();
+
+        if !is_skydome_texture_size(width, height) {
+            return Self::create_fallback_skybox_texture(device, queue);
+        }
+
+        Arc::new(Texture::new_with_data(
+            device,
+            queue,
+            &TextureDescriptor {
+                label: Some("skybox skydome texture"),
+                size: Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba8UnormSrgb,
+                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+                view_formats: Default::default(),
+            },
+            image.as_raw(),
+            transparent,
+        ))
     }
 
     fn create_forward_textures(device: &Device, forward_size: ScreenSize, msaa: Msaa) -> ForwardTextures {
@@ -1819,6 +1867,43 @@ impl GlobalContext {
                 },
             ],
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_skybox_texture_path_matches_archive_location() {
+        assert_eq!(default_skybox_texture_path(), "skybox\\day.png");
+    }
+
+    #[test]
+    fn skydome_texture_size_requires_two_to_one_panorama() {
+        assert!(is_skydome_texture_size(4096, 2048));
+        assert!(is_skydome_texture_size(8192, 4096));
+        assert!(!is_skydome_texture_size(12288, 2048));
+        assert!(!is_skydome_texture_size(0, 0));
+    }
+
+    #[test]
+    fn skybox_shader_renders_physical_skydome_mesh() {
+        let shader = include_str!("../../shaders/passes/forward/skybox.slang");
+        let drawer = include_str!("passes/forward/skybox.rs");
+
+        assert!(shader.contains("SKYDOME_VERTEX_COUNT"));
+        assert!(shader.contains("SKYDOME_LONGITUDE_SEGMENTS"));
+        assert!(shader.contains("SKYDOME_LATITUDE_SEGMENTS"));
+        assert!(shader.contains("skydome_vertex(vertex_index)"));
+        assert!(shader.contains("global_uniforms.view_projection"));
+        assert!(shader.contains("global_uniforms.camera_position.xyz + vertex.direction * SKYDOME_RADIUS"));
+        assert!(shader.contains("skybox_texture.Sample(linear_sampler, input.uv)"));
+        assert!(drawer.contains("pass.draw(0..SKYDOME_VERTEX_COUNT, 0..1)"));
+        assert!(!shader.contains("corner_index == 0 || corner_index == 3 || corner_index == 5"));
+        assert!(!shader.contains("FullscreenVertex.new"));
+        assert!(!shader.contains("inverse_view_projection"));
+        assert!(!shader.contains("SKYBOX_CUBEMAP_FACE_COUNT"));
     }
 }
 

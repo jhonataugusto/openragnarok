@@ -13,6 +13,7 @@ use crate::graphics::shader_compiler::ShaderCompiler;
 use crate::graphics::{Capabilities, GlobalContext, SkyboxInstruction, Texture};
 
 const DRAWER_NAME: &str = "forward skybox";
+const SKYDOME_VERTEX_COUNT: u32 = 64 * 24 * 6;
 
 pub(crate) struct ForwardSkyboxDrawer {
     skybox_texture: Arc<Texture>,
@@ -106,6 +107,6 @@ impl Drawer<{ BindGroupCount::Two }, { ColorAttachmentCount::Three }, { DepthAtt
 
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(2, self.skybox_texture.get_bind_group(), &[]);
-        pass.draw(0..3, 0..1);
+        pass.draw(0..SKYDOME_VERTEX_COUNT, 0..1);
     }
 }

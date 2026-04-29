@@ -72,8 +72,8 @@ use networking::{PacketHistory, PacketHistoryCallback};
 #[cfg(not(feature = "debug"))]
 use ragnarok_packets::handler::NoPacketCallback;
 use ragnarok_packets::{
-    AttackRange, BuyShopItemsResult, CharacterServerInformation, ClientTick, Direction, DisappearanceReason, EntityId, HotbarSlot,
-    SellItemsResult, SkillId, SkillLevel, SkillType, TilePosition, UnitId, WorldPosition,
+    AttackRange, BuyShopItemsResult, CharacterServerInformation, ClientTick, Direction, DisappearanceReason, EntityId, EquipPosition,
+    HotbarSlot, SellItemsResult, SkillId, SkillLevel, SkillType, TilePosition, UnitId, WorldPosition,
 };
 use renderer::InterfaceRenderer;
 use rust_state::{ManuallyAssertExt, State};
@@ -423,12 +423,20 @@ impl ThirdPersonMovementState {
     }
 }
 
+fn equipped_item_visual_id(view_id: u16, equipped_position: EquipPosition, fallback_visual_item_id: Option<u32>) -> u32 {
+    match (view_id, equipped_position == EquipPosition::NONE) {
+        (0, false) => fallback_visual_item_id.unwrap_or(0),
+        _ => view_id as u32,
+    }
+}
+
 #[cfg(test)]
 mod third_person_movement_tests {
     use ragnarok_packets::{ClientTick, TilePosition};
 
     use super::{
         THIRD_PERSON_HOLD_TILE_DISTANCE, THIRD_PERSON_TAP_TILE_DISTANCE, ThirdPersonMovementState, default_skybox_fog_instruction,
+        equipped_item_visual_id,
     };
 
     #[test]
@@ -466,6 +474,27 @@ mod third_person_movement_tests {
             state.tile_distance(true, ClientTick(1100)),
             Some(THIRD_PERSON_HOLD_TILE_DISTANCE)
         );
+    }
+
+    #[test]
+    fn equip_visual_id_falls_back_to_item_id_when_server_view_id_is_zero() {
+        assert_eq!(
+            equipped_item_visual_id(0, ragnarok_packets::EquipPosition::RIGHT_HAND, Some(1201)),
+            1201
+        );
+    }
+
+    #[test]
+    fn equip_visual_id_keeps_server_view_id_when_it_is_present() {
+        assert_eq!(
+            equipped_item_visual_id(42, ragnarok_packets::EquipPosition::RIGHT_HAND, Some(1201)),
+            42
+        );
+    }
+
+    #[test]
+    fn equip_visual_id_does_not_fallback_when_unequipping() {
+        assert_eq!(equipped_item_visual_id(0, ragnarok_packets::EquipPosition::NONE, Some(1201)), 0);
     }
 }
 
@@ -1935,10 +1964,42 @@ impl Client {
                     *self.client_state.follow_mut(client_state().skill_tree().skills()) =
                         skill_information.into_iter().map(LearnedSkill::new).collect();
                 }
-                NetworkEvent::UpdateEquippedPosition { index, equipped_position } => {
+                NetworkEvent::UpdateEquippedPosition {
+                    index,
+                    equipped_position,
+                    changed_position,
+                    view_id,
+                } => {
+                    let fallback_visual_item_id = (view_id == 0 && equipped_position != EquipPosition::NONE)
+                        .then(|| self.client_state.follow(client_state().inventory()).equippable_item_id(index))
+                        .flatten()
+                        .map(|item_id| item_id.0);
+
                     self.client_state
                         .follow_mut(client_state().inventory())
                         .update_equipped_position(index, equipped_position);
+
+                    if let Some(entity) = self.client_state.try_follow_mut(this_entity()) {
+                        let visual_id = equipped_item_visual_id(view_id, equipped_position, fallback_visual_item_id);
+
+                        if changed_position.intersects(EquipPosition::RIGHT_HAND | EquipPosition::LEFT_RIGHT_HAND) {
+                            entity.set_weapon(visual_id);
+
+                            if visual_id != 0 && changed_position.intersects(EquipPosition::LEFT_RIGHT_HAND) {
+                                entity.set_shield(0);
+                            }
+                        } else if changed_position.intersects(EquipPosition::LEFT_HAND) {
+                            entity.set_shield(visual_id);
+                        }
+
+                        if let Some(animation_data) = self.async_loader.request_animation_data_load(
+                            entity.get_entity_id(),
+                            entity.get_entity_type(),
+                            entity.get_entity_part_files(&self.library),
+                        ) {
+                            entity.set_animation_data(animation_data);
+                        }
+                    }
                 }
                 NetworkEvent::ChangeJob { account_id, job_id } => {
                     let layout = self.async_loader.request_skill_tree_layout_load(job_id, client_tick);
@@ -1978,6 +2039,46 @@ impl Client {
                         .unwrap();
 
                     entity.set_hair(hair_id as usize);
+
+                    if let Some(animation_data) = self.async_loader.request_animation_data_load(
+                        entity.get_entity_id(),
+                        entity.get_entity_type(),
+                        entity.get_entity_part_files(&self.library),
+                    ) {
+                        entity.set_animation_data(animation_data);
+                    }
+                }
+                NetworkEvent::ChangeWeapon { account_id, weapon } => {
+                    let Some(entity) = self
+                        .client_state
+                        .follow_mut(client_state().entities())
+                        .iter_mut()
+                        .find(|entity| entity.get_entity_id().0 == account_id.0)
+                    else {
+                        continue;
+                    };
+
+                    entity.set_weapon(weapon);
+
+                    if let Some(animation_data) = self.async_loader.request_animation_data_load(
+                        entity.get_entity_id(),
+                        entity.get_entity_type(),
+                        entity.get_entity_part_files(&self.library),
+                    ) {
+                        entity.set_animation_data(animation_data);
+                    }
+                }
+                NetworkEvent::ChangeShield { account_id, shield } => {
+                    let Some(entity) = self
+                        .client_state
+                        .follow_mut(client_state().entities())
+                        .iter_mut()
+                        .find(|entity| entity.get_entity_id().0 == account_id.0)
+                    else {
+                        continue;
+                    };
+
+                    entity.set_shield(shield);
 
                     if let Some(animation_data) = self.async_loader.request_animation_data_load(
                         entity.get_entity_id(),

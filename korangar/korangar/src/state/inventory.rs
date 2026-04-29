@@ -75,4 +75,77 @@ impl Inventory {
 
         *equipped_position = new_equipped_position;
     }
+
+    pub fn equippable_item_id(&self, index: InventoryIndex) -> Option<ItemId> {
+        let item = self.items.iter().find(|item| item.index == index)?;
+
+        matches!(item.details, InventoryItemDetails::Equippable { .. }).then_some(item.item_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use korangar_networking::InventoryItem;
+    use ragnarok_packets::{EquippableItemFlags, ItemOptions, RegularItemFlags};
+
+    use super::*;
+
+    fn test_metadata() -> ResourceMetadata {
+        ResourceMetadata {
+            texture: None,
+            name: String::new(),
+        }
+    }
+
+    #[test]
+    fn equippable_item_id_returns_the_item_id_for_equipment() {
+        let inventory = Inventory {
+            items: vec![InventoryItem {
+                metadata: test_metadata(),
+                index: InventoryIndex(2),
+                item_id: ItemId(1201),
+                item_type: 4,
+                slot: [0; 4],
+                hire_expiration_date: 0,
+                details: InventoryItemDetails::Equippable {
+                    equip_position: EquipPosition::RIGHT_HAND,
+                    equipped_position: EquipPosition::NONE,
+                    bind_on_equip_type: 0,
+                    w_item_sprite_number: 0,
+                    option_count: 0,
+                    option_data: std::array::from_fn(|_| ItemOptions {
+                        index: 0,
+                        value: 0,
+                        parameter: 0,
+                    }),
+                    refinement_level: 0,
+                    enchantment_level: 0,
+                    flags: EquippableItemFlags::empty(),
+                },
+            }],
+        };
+
+        assert_eq!(inventory.equippable_item_id(InventoryIndex(2)), Some(ItemId(1201)));
+    }
+
+    #[test]
+    fn equippable_item_id_ignores_regular_items() {
+        let inventory = Inventory {
+            items: vec![InventoryItem {
+                metadata: test_metadata(),
+                index: InventoryIndex(2),
+                item_id: ItemId(501),
+                item_type: 0,
+                slot: [0; 4],
+                hire_expiration_date: 0,
+                details: InventoryItemDetails::Regular {
+                    amount: 1,
+                    equipped_position: EquipPosition::NONE,
+                    flags: RegularItemFlags::empty(),
+                },
+            }],
+        };
+
+        assert_eq!(inventory.equippable_item_id(InventoryIndex(2)), None);
+    }
 }

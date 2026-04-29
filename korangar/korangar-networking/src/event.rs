@@ -205,6 +205,8 @@ pub enum NetworkEvent {
     UpdateEquippedPosition {
         index: InventoryIndex,
         equipped_position: EquipPosition,
+        changed_position: EquipPosition,
+        view_id: u16,
     },
     ChangeJob {
         account_id: AccountId,
@@ -213,6 +215,14 @@ pub enum NetworkEvent {
     ChangeHair {
         account_id: AccountId,
         hair_id: u32,
+    },
+    ChangeWeapon {
+        account_id: AccountId,
+        weapon: u32,
+    },
+    ChangeShield {
+        account_id: AccountId,
+        shield: u32,
     },
     LoggedOut,
     FriendRequest {

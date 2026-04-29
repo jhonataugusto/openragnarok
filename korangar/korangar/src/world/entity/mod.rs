@@ -246,6 +246,8 @@ pub struct Common {
     pub direction: Direction,
     pub head_direction: usize,
     pub sex: Sex,
+    pub weapon: u32,
+    pub shield: u32,
 
     #[hidden_element]
     pub entity_type: EntityType,
@@ -419,7 +421,35 @@ fn get_sprite_path_for_player_job(job_id: JobId) -> &'static str {
     }
 }
 
-fn get_entity_part_files(library: &Library, entity_type: EntityType, job_id: JobId, sex: Sex, head: Option<usize>) -> Vec<String> {
+fn player_weapon_path(sex_sprite_path: &str, job_id: JobId, weapon: u32) -> String {
+    player_weapon_path_from_name(sex_sprite_path, job_id, &weapon.to_string())
+}
+
+fn player_weapon_path_from_name(sex_sprite_path: &str, job_id: JobId, weapon: &str) -> String {
+    let job_sprite_path = get_sprite_path_for_player_job(job_id);
+    format!(
+        "인간족\\{}\\{}_{}_{}",
+        job_sprite_path, job_sprite_path, sex_sprite_path, weapon
+    )
+}
+
+fn player_shield_path(sex_sprite_path: &str, job_id: JobId, shield: u32) -> String {
+    let job_sprite_path = get_sprite_path_for_player_job(job_id);
+    format!(
+        "방패\\{}\\{}_{}_{}_방패",
+        job_sprite_path, job_sprite_path, sex_sprite_path, shield
+    )
+}
+
+fn get_entity_part_files(
+    library: &Library,
+    entity_type: EntityType,
+    job_id: JobId,
+    sex: Sex,
+    head: Option<usize>,
+    weapon: u32,
+    shield: u32,
+) -> Vec<String> {
     let sex_sprite_path = match sex == Sex::Female {
         true => "여",
         false => "남",
@@ -447,13 +477,68 @@ fn get_entity_part_files(library: &Library, entity_type: EntityType, job_id: Job
     };
 
     match entity_type {
-        EntityType::Player => vec![
-            player_body_path(sex_sprite_path, job_id),
-            player_head_path(sex_sprite_path, head_id),
-        ],
+        EntityType::Player => {
+            let mut entity_part_files = vec![
+                player_body_path(sex_sprite_path, job_id),
+                player_head_path(sex_sprite_path, head_id),
+            ];
+
+            if weapon != 0 {
+                let numeric_weapon_path = player_weapon_path(sex_sprite_path, job_id, weapon);
+                if library.has_visual_sprite_file(&numeric_weapon_path) {
+                    entity_part_files.push(numeric_weapon_path);
+                } else if let Some(weapon_sprite_name) = library.weapon_sprite_name(weapon) {
+                    let named_weapon_path = player_weapon_path_from_name(sex_sprite_path, job_id, weapon_sprite_name);
+                    if library.has_visual_sprite_file(&named_weapon_path) {
+                        entity_part_files.push(named_weapon_path);
+                    }
+                }
+            }
+
+            if shield != 0 {
+                let shield_path = player_shield_path(sex_sprite_path, job_id, shield);
+                if library.has_visual_sprite_file(&shield_path) {
+                    entity_part_files.push(shield_path);
+                }
+            }
+
+            entity_part_files
+        }
         EntityType::Npc => vec![format!("npc\\{}", library.get::<JobIdentity>(job_id).to_string())],
         EntityType::Monster => vec![format!("몬스터\\{}", library.get::<JobIdentity>(job_id).to_string())],
         EntityType::Warp | EntityType::Hidden => vec![format!("npc\\{}", library.get::<JobIdentity>(job_id).to_string())], // TODO: change
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use hashbrown::{HashMap, HashSet};
+
+    use super::*;
+
+    #[test]
+    fn player_weapon_path_uses_job_sex_and_view_id() {
+        assert_eq!(player_weapon_path("남", JobId(1), 1207), "인간족\\검사\\검사_남_1207");
+    }
+
+    #[test]
+    fn player_shield_path_uses_shield_suffix() {
+        assert_eq!(player_shield_path("여", JobId(1), 28901), "방패\\검사\\검사_여_28901_방패");
+    }
+
+    #[test]
+    fn player_part_files_use_weapon_table_fallback_for_knife() {
+        let library = Library::test_new(
+            HashSet::from_iter([
+                "인간족\\초보자\\초보자_남_단검.spr".to_owned(),
+                "인간족\\초보자\\초보자_남_단검.act".to_owned(),
+            ]),
+            HashMap::from_iter([(1201, "단검".to_owned())]),
+        );
+
+        let part_files = get_entity_part_files(&library, EntityType::Player, JobId(0), Sex::Male, Some(1), 1201, 0);
+
+        assert!(part_files.contains(&"인간족\\초보자\\초보자_남_단검".to_owned()));
     }
 }
 
@@ -474,6 +559,8 @@ impl Common {
         let health_points = entity_data.health_points as usize;
         let maximum_health_points = entity_data.maximum_health_points as usize;
         let sex = entity_data.sex;
+        let weapon = entity_data.weapon;
+        let shield = entity_data.shield;
 
         let active_movement = None;
         let entity_type = job_id.into();
@@ -493,6 +580,8 @@ impl Common {
             direction,
             head_direction,
             sex,
+            weapon,
+            shield,
             active_movement,
             entity_type,
             movement_speed,
@@ -510,7 +599,7 @@ impl Common {
     }
 
     pub fn get_entity_part_files(&self, library: &Library) -> Vec<String> {
-        get_entity_part_files(library, self.entity_type, self.job_id, self.sex, None)
+        get_entity_part_files(library, self.entity_type, self.job_id, self.sex, None, self.weapon, self.shield)
     }
 
     pub fn is_dead(&self) -> bool {
@@ -1276,7 +1365,15 @@ impl Player {
 
     pub fn get_entity_part_files(&self, library: &Library) -> Vec<String> {
         let common = self.get_common();
-        get_entity_part_files(library, common.entity_type, common.job_id, common.sex, Some(self.hair_id))
+        get_entity_part_files(
+            library,
+            common.entity_type,
+            common.job_id,
+            common.sex,
+            Some(self.hair_id),
+            common.weapon,
+            common.shield,
+        )
     }
 }
 
@@ -1463,6 +1560,14 @@ impl Entity {
         if let Self::Player(player) = self {
             player.hair_id = hair_id
         }
+    }
+
+    pub fn set_weapon(&mut self, weapon: u32) {
+        self.get_common_mut().weapon = weapon;
+    }
+
+    pub fn set_shield(&mut self, shield: u32) {
+        self.get_common_mut().shield = shield;
     }
 
     pub fn set_animation_data(&mut self, animation_data: Arc<AnimationData>) {

@@ -444,6 +444,14 @@ where
             account_id: packet.account_id,
             hair_id: packet.value,
         }),
+        SpriteChangeType::Weapon => Some(NetworkEvent::ChangeWeapon {
+            account_id: packet.account_id,
+            weapon: packet.value,
+        }),
+        SpriteChangeType::Shield => Some(NetworkEvent::ChangeShield {
+            account_id: packet.account_id,
+            shield: packet.value,
+        }),
         _ => None,
     })?;
     packet_handler.register({
@@ -829,6 +837,8 @@ where
         RequestEquipItemStatus::Success => Some(NetworkEvent::UpdateEquippedPosition {
             index: packet.inventory_index,
             equipped_position: packet.equipped_position,
+            changed_position: packet.equipped_position,
+            view_id: packet.view_id,
         }),
         _ => None,
     })?;
@@ -836,6 +846,8 @@ where
         RequestUnequipItemStatus::Success => Some(NetworkEvent::UpdateEquippedPosition {
             index: packet.inventory_index,
             equipped_position: EquipPosition::NONE,
+            changed_position: packet.equipped_position,
+            view_id: 0,
         }),
         _ => None,
     })?;

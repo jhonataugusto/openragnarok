@@ -436,27 +436,12 @@ fn merge_frame(frames: &mut [AnimationFrame]) -> AnimationFrame {
 
     // If the function input contains no frame, return a 1-pixel image.
     if frames.is_empty() {
-        let frame_part = AnimationFramePart {
-            animation_index: usize::MAX,
-            sprite_number: usize::MAX,
-            size: Vector2::new(1, 1),
-            offset: Vector2::zero(),
-            mirror: false,
-            color: Color {
-                red: 0.0,
-                blue: 0.0,
-                green: 0.0,
-                alpha: 0.0,
-            },
-            ..Default::default()
-        };
-
         let frame = AnimationFrame {
             event: None,
             size: Vector2::new(1, 1),
             top_left: Vector2::zero(),
             offset: Vector2::zero(),
-            frame_parts: vec![frame_part],
+            frame_parts: Vec::new(),
             #[cfg(feature = "debug")]
             horizontal_matrix: Matrix4::identity(),
             #[cfg(feature = "debug")]
@@ -506,5 +491,18 @@ fn merge_frame(frames: &mut [AnimationFrame]) -> AnimationFrame {
         horizontal_matrix: Matrix4::identity(),
         #[cfg(feature = "debug")]
         vertical_matrix: Matrix4::identity(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_merge_frame_has_no_renderable_parts() {
+        let frame = merge_frame(&mut []);
+
+        assert_eq!(frame.size, Vector2::new(1, 1));
+        assert!(frame.frame_parts.is_empty());
     }
 }

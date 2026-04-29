@@ -168,18 +168,14 @@ impl Table for SkillTreeLayout {
 
 #[cfg(test)]
 mod tests {
+    use hashbrown::HashSet;
+
     use super::*;
 
     fn library_with_skill_tree_table(skill_tree_table: <SkillTreeLayout as Table>::Storage) -> Library {
-        Library {
-            job_identity_table: HashMap::new(),
-            item_info_table: HashMap::new(),
-            map_sky_data_table: HashMap::new(),
-            skill_information_table: HashMap::new(),
-            skill_requirements_table: HashMap::new(),
-            skill_tree_table,
-            baby_job_table: HashMap::new(),
-        }
+        let mut library = Library::test_new(HashSet::new(), HashMap::new());
+        library.skill_tree_table = skill_tree_table;
+        library
     }
 
     #[test]

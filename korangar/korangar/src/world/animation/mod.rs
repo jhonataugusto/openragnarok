@@ -102,26 +102,6 @@ mod tests {
         assert_eq!(animation_state.action_type, AnimationActionType::Idle);
         assert!(animation_state.looping);
     }
-
-    #[test]
-    fn armed_player_stands_in_ready_fight() {
-        let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
-
-        animation_state.stand(EntityType::Player, true, ClientTick(10));
-
-        assert_eq!(animation_state.action_type, AnimationActionType::ReadyFight);
-        assert!(animation_state.looping);
-    }
-
-    #[test]
-    fn unarmed_player_stands_idle() {
-        let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
-
-        animation_state.stand(EntityType::Player, false, ClientTick(10));
-
-        assert_eq!(animation_state.action_type, AnimationActionType::Idle);
-        assert!(animation_state.looping);
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -225,14 +205,6 @@ impl AnimationState {
         self.recover_to_ready_fight = false;
     }
 
-    pub fn stand(&mut self, entity_type: EntityType, armed: bool, client_tick: ClientTick) {
-        if entity_type == EntityType::Player && armed {
-            self.ready_fight(entity_type, client_tick);
-        } else {
-            self.idle(entity_type, client_tick);
-        }
-    }
-
     pub fn recover_finished_action(&mut self, entity_type: EntityType, client_tick: ClientTick) {
         if self.is_attack() && self.recover_to_ready_fight {
             self.ready_fight(entity_type, client_tick);
@@ -254,10 +226,6 @@ impl AnimationState {
 
     pub fn is_walking(&self) -> bool {
         self.action_type == AnimationActionType::Walk
-    }
-
-    pub fn is_standing(&self) -> bool {
-        matches!(self.action_type, AnimationActionType::Idle | AnimationActionType::ReadyFight)
     }
 
     pub fn is_dead(&self) -> bool {

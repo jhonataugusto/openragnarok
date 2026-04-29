@@ -566,8 +566,7 @@ impl Common {
         let entity_type = job_id.into();
 
         let details = ResourceState::Unavailable;
-        let mut animation_state = AnimationState::new(entity_type, client_tick);
-        animation_state.stand(entity_type, weapon != 0, client_tick);
+        let animation_state = AnimationState::new(entity_type, client_tick);
         let scale = match library.get::<IsBabyJob>(job_id) {
             IsBabyJob(true) => BABY_JOB_SCALE,
             IsBabyJob(false) => 1.0,
@@ -792,7 +791,7 @@ impl Common {
         self.tile_position = position;
         self.world_position = world_position;
         self.active_movement = None;
-        self.animation_state.stand(self.entity_type, self.weapon != 0, client_tick);
+        self.animation_state.idle(self.entity_type, client_tick);
     }
 
     pub fn move_from_to(
@@ -1563,13 +1562,8 @@ impl Entity {
         }
     }
 
-    pub fn set_weapon(&mut self, weapon: u32, client_tick: ClientTick) {
-        let common = self.get_common_mut();
-        common.weapon = weapon;
-
-        if common.animation_state.is_standing() {
-            common.animation_state.stand(common.entity_type, weapon != 0, client_tick);
-        }
+    pub fn set_weapon(&mut self, weapon: u32) {
+        self.get_common_mut().weapon = weapon;
     }
 
     pub fn set_shield(&mut self, shield: u32) {
@@ -1622,8 +1616,7 @@ impl Entity {
 
     pub fn set_idle(&mut self, client_tick: ClientTick) {
         let entity_type = self.get_entity_type();
-        let common = self.get_common_mut();
-        common.animation_state.stand(entity_type, common.weapon != 0, client_tick);
+        self.get_common_mut().animation_state.idle(entity_type, client_tick);
     }
 
     pub fn set_pickup(&mut self, client_tick: ClientTick) {

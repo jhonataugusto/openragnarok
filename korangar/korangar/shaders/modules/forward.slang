@@ -117,6 +117,27 @@ public func calculate_attenuation(distance: float, range: float) -> float {
 }
 
 [ForceInline]
+public func calculate_fog_factor(global_uniforms: GlobalUniforms, world_position: float3) -> float {
+    if (global_uniforms.fog_parameters.w <= 0.0) {
+        return 0.0;
+    }
+
+    let fog_start = global_uniforms.fog_parameters.x;
+    let fog_end = global_uniforms.fog_parameters.y;
+    let fog_density = saturate(global_uniforms.fog_parameters.z);
+    let fog_range = max(fog_end - fog_start, EPSILON);
+    let distance_to_camera = distance(global_uniforms.camera_position.xyz, world_position);
+    let linear_factor = saturate((distance_to_camera - fog_start) / fog_range);
+    return linear_factor * fog_density;
+}
+
+[ForceInline]
+public func apply_fog(global_uniforms: GlobalUniforms, color: float3, world_position: float3) -> float3 {
+    let fog_factor = calculate_fog_factor(global_uniforms, world_position);
+    return lerp(color, global_uniforms.fog_color.rgb, fog_factor);
+}
+
+[ForceInline]
 public func calculate_mip_level(texture_coordinate: float2) -> float {
     let dx = ddx(texture_coordinate);
     let dy = ddy(texture_coordinate);

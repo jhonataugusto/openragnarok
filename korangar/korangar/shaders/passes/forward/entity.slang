@@ -243,6 +243,7 @@ func fragment(input: ForwardEntityVertexOutput) -> ForwardEntityFragmentOutput {
             color = color_balance(color, -0.01, 0.0, 0.0);
         }
 
+        color = apply_fog(global_uniforms, color, adjusted_world_position.xyz);
         output.color = float4(color, alpha_channel);
         output.depth = frag_depth;
     }

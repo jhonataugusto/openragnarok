@@ -21,4 +21,6 @@ public struct GlobalUniforms {
     public var shadow_method: uint;
     public var shadow_detail: uint;
     public var use_sdsm: uint;
+    public var fog_color: float4;
+    public var fog_parameters: float4;
 };

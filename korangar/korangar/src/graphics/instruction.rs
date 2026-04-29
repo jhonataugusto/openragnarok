@@ -18,6 +18,7 @@ pub struct RenderInstruction<'a> {
     pub show_interface: bool,
     pub picker_position: ScreenPosition,
     pub uniforms: Uniforms,
+    pub skybox: SkyboxInstruction,
     pub indicator: Option<IndicatorInstruction>,
     pub interface: &'a [InterfaceRectangleInstruction],
     /// Between 3D world and effects.
@@ -67,6 +68,7 @@ pub struct Uniforms {
     pub shadow_detail: ShadowDetail,
     pub use_sdsm: bool,
     pub sdsm_enabled: bool,
+    pub fog: FogInstruction,
 }
 
 impl Default for Uniforms {
@@ -82,8 +84,52 @@ impl Default for Uniforms {
             shadow_detail: ShadowDetail::Low,
             use_sdsm: false,
             sdsm_enabled: false,
+            fog: FogInstruction::disabled(),
         }
     }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct FogInstruction {
+    pub enabled: bool,
+    pub color: Color,
+    pub start: f32,
+    pub end: f32,
+    pub density: f32,
+}
+
+impl Default for FogInstruction {
+    fn default() -> Self {
+        Self::disabled()
+    }
+}
+
+impl FogInstruction {
+    pub const fn disabled() -> Self {
+        Self {
+            enabled: false,
+            color: Color::TRANSPARENT,
+            start: 0.0,
+            end: 1.0,
+            density: 0.0,
+        }
+    }
+
+    #[cfg(test)]
+    fn factor_at_distance(self, distance: f32) -> f32 {
+        if !self.enabled {
+            return 0.0;
+        }
+
+        let span = (self.end - self.start).max(f32::EPSILON);
+        let linear_factor = ((distance - self.start) / span).clamp(0.0, 1.0);
+        linear_factor * self.density.clamp(0.0, 1.0)
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+pub struct SkyboxInstruction {
+    pub enabled: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -331,4 +377,48 @@ pub struct DebugCircleInstruction {
 pub struct DebugRectangleInstruction {
     pub world: Matrix4<f32>,
     pub color: Color,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fog_factor_is_zero_before_start_distance() {
+        let fog = FogInstruction {
+            enabled: true,
+            color: Color::rgb_u8(128, 160, 192),
+            start: 100.0,
+            end: 300.0,
+            density: 0.5,
+        };
+
+        assert_eq!(fog.factor_at_distance(50.0), 0.0);
+    }
+
+    #[test]
+    fn fog_factor_reaches_density_at_end_distance() {
+        let fog = FogInstruction {
+            enabled: true,
+            color: Color::rgb_u8(128, 160, 192),
+            start: 100.0,
+            end: 300.0,
+            density: 0.5,
+        };
+
+        assert_eq!(fog.factor_at_distance(300.0), 0.5);
+    }
+
+    #[test]
+    fn disabled_fog_has_zero_factor() {
+        let fog = FogInstruction {
+            enabled: false,
+            color: Color::rgb_u8(128, 160, 192),
+            start: 100.0,
+            end: 300.0,
+            density: 0.5,
+        };
+
+        assert_eq!(fog.factor_at_distance(300.0), 0.0);
+    }
 }

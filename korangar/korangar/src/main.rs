@@ -128,6 +128,10 @@ const CLIENT_NAME: &str = "Korangar";
 const ROLLING_CUTTER_ID: SkillId = SkillId(2036);
 const DEFAULT_MAP: &str = "geffen";
 const START_CAMERA_FOCUS_POINT: Point3<f32> = Point3::new(600.0, 0.0, 240.0);
+const DEFAULT_SKYBOX_FOG_COLOR: Color = Color::rgb_u8(169, 186, 197);
+const DEFAULT_SKYBOX_FOG_START: f32 = 220.0;
+const DEFAULT_SKYBOX_FOG_END: f32 = 720.0;
+const DEFAULT_SKYBOX_FOG_DENSITY: f32 = 0.42;
 const DEFAULT_BACKGROUND_MUSIC: Option<&str> = Some("bgm\\01.mp3");
 const MAIN_MENU_CLICK_SOUND_EFFECT: &str = "버튼소리.wav";
 const CINEMATIC_DIALOG_TEXT_SOUND_EFFECT: &str = MAIN_MENU_CLICK_SOUND_EFFECT;
@@ -4021,7 +4025,15 @@ impl Client {
                     shadow_detail,
                     use_sdsm,
                     sdsm_enabled,
+                    fog: FogInstruction {
+                        enabled: true,
+                        color: DEFAULT_SKYBOX_FOG_COLOR,
+                        start: DEFAULT_SKYBOX_FOG_START,
+                        end: DEFAULT_SKYBOX_FOG_END,
+                        density: DEFAULT_SKYBOX_FOG_DENSITY,
+                    },
                 },
+                skybox: SkyboxInstruction { enabled: true },
                 indicator: indicator_instruction,
                 interface: interface_instructions.as_slice(),
                 bottom_layer_rectangles: bottom_layer_instructions.as_slice(),

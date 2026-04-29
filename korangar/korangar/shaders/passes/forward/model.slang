@@ -217,6 +217,7 @@ func fragment(input: ModelVertexOutput) -> float4 {
             color = color_balance(color, -0.01, 0.0, 0.0);
         }
 
+        color = apply_fog(global_uniforms, color, input.world_position.xyz);
         fragment_color = float4(color, diffuse_color.a);
     }
 

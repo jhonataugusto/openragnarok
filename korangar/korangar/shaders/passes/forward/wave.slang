@@ -130,6 +130,7 @@ func calculate_wave_color(world_position: float3, normal: float3) -> float4 {
     }
 
     final_color *= water_wave_uniforms.water_opacity;
+    final_color = apply_fog(global_uniforms, final_color, world_position);
 
     return float4(final_color, water_wave_uniforms.water_opacity);
 }

@@ -97,6 +97,8 @@ pub(crate) struct GlobalUniforms {
     shadow_method: u32,
     shadow_detail: u32,
     use_sdsm: u32,
+    fog_color: [f32; 4],
+    fog_parameters: [f32; 4],
 }
 
 #[derive(Copy, Clone, Pod, Zeroable)]
@@ -363,6 +365,7 @@ pub(crate) struct GlobalContext {
     pub(crate) screen_space_anti_aliasing: ScreenSpaceAntiAliasing,
     pub(crate) high_quality_interface: bool,
     pub(crate) solid_pixel_texture: Arc<Texture>,
+    pub(crate) skybox_texture: Arc<Texture>,
     pub(crate) walk_indicator_texture: Arc<Texture>,
     pub(crate) forward_depth_texture: AttachmentTexture,
     pub(crate) picker_buffer_texture: AttachmentTexture,
@@ -476,6 +479,13 @@ impl Prepare for GlobalContext {
             shadow_method: instructions.uniforms.shadow_method.into(),
             shadow_detail: instructions.uniforms.shadow_detail.into(),
             use_sdsm: instructions.uniforms.use_sdsm as u32,
+            fog_color: instructions.uniforms.fog.color.components_linear(),
+            fog_parameters: [
+                instructions.uniforms.fog.start,
+                instructions.uniforms.fog.end,
+                instructions.uniforms.fog.density,
+                instructions.uniforms.fog.enabled as u32 as f32,
+            ],
         };
 
         self.directional_light_uniforms = DirectionalLightUniforms {
@@ -655,6 +665,27 @@ impl GlobalContext {
             RgbaImage::from_raw(1, 1, vec![255, 255, 255, 255]).unwrap().as_raw(),
             false,
         ));
+        let skybox_texture = Arc::new(Texture::new_with_data(
+            device,
+            queue,
+            &TextureDescriptor {
+                label: Some("default skybox gradient"),
+                size: Extent3d {
+                    width: 1,
+                    height: 2,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba8UnormSrgb,
+                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+                view_formats: Default::default(),
+            },
+            // Top pixel first, horizon pixel second.
+            &[96, 151, 205, 255, 223, 214, 183, 255],
+            false,
+        ));
         let walk_indicator_texture = texture_loader.get_or_load("grid.tga", ImageType::Color).unwrap();
         let forward_textures = Self::create_forward_textures(device, forward_size, msaa);
         let picker_textures = Self::create_picker_textures(device, screen_size);
@@ -814,6 +845,7 @@ impl GlobalContext {
             screen_space_anti_aliasing,
             high_quality_interface,
             solid_pixel_texture,
+            skybox_texture,
             walk_indicator_texture,
             forward_depth_texture: forward_textures.forward_depth_texture,
             picker_buffer_texture: picker_textures.picker_buffer_texture,

@@ -98,6 +98,7 @@ struct EngineContext {
     point_shadow_model_drawer: PointShadowModelDrawer,
     point_shadow_indicator_drawer: PointShadowIndicatorDrawer,
     light_culling_dispatcher: LightCullingDispatcher,
+    forward_skybox_drawer: ForwardSkyboxDrawer,
     forward_entity_drawer: ForwardEntityDrawer,
     forward_indicator_drawer: ForwardIndicatorDrawer,
     forward_model_drawer: ForwardModelDrawer,
@@ -326,6 +327,7 @@ impl GraphicsEngine {
                             &light_culling_pass_context,
                         );
                         let ForwardResources {
+                            forward_skybox_drawer,
                             forward_entity_drawer,
                             forward_indicator_drawer,
                             forward_model_drawer,
@@ -455,6 +457,7 @@ impl GraphicsEngine {
                         point_shadow_indicator_drawer,
                         point_shadow_entity_drawer,
                         light_culling_dispatcher,
+                        forward_skybox_drawer,
                         forward_entity_drawer,
                         forward_indicator_drawer,
                         forward_model_drawer,
@@ -595,6 +598,7 @@ impl GraphicsEngine {
             engine_context.global_context.update_msaa(&self.device, msaa);
 
             let ForwardResources {
+                forward_skybox_drawer,
                 forward_entity_drawer,
                 forward_indicator_drawer,
                 forward_model_drawer,
@@ -630,6 +634,7 @@ impl GraphicsEngine {
                 &engine_context.post_processing_pass_context,
             );
 
+            engine_context.forward_skybox_drawer = forward_skybox_drawer;
             engine_context.forward_entity_drawer = forward_entity_drawer;
             engine_context.forward_indicator_drawer = forward_indicator_drawer;
             engine_context.forward_model_drawer = forward_model_drawer;
@@ -1225,6 +1230,8 @@ impl GraphicsEngine {
                         .forward_pass_context
                         .create_pass(&mut forward_encoder, &engine_context.global_context, None);
 
+                engine_context.forward_skybox_drawer.draw(&mut render_pass, instruction.skybox);
+
                 let batch_data = &ModelBatchDrawData {
                     batches: instruction.model_batches,
                     instructions: instruction.models,
@@ -1483,6 +1490,7 @@ impl UploadVisitor<'_> {
 }
 
 struct ForwardResources {
+    forward_skybox_drawer: ForwardSkyboxDrawer,
     forward_entity_drawer: ForwardEntityDrawer,
     forward_indicator_drawer: ForwardIndicatorDrawer,
     forward_model_drawer: ForwardModelDrawer,
@@ -1497,6 +1505,14 @@ impl ForwardResources {
         global_context: &GlobalContext,
         forward_pass_context: &ForwardRenderPassContext,
     ) -> Self {
+        let forward_skybox_drawer = ForwardSkyboxDrawer::new(
+            capabilities,
+            device,
+            queue,
+            shader_compiler,
+            global_context,
+            forward_pass_context,
+        );
         let forward_entity_drawer = ForwardEntityDrawer::new(
             capabilities,
             device,
@@ -1523,6 +1539,7 @@ impl ForwardResources {
         );
 
         Self {
+            forward_skybox_drawer,
             forward_entity_drawer,
             forward_indicator_drawer,
             forward_model_drawer,

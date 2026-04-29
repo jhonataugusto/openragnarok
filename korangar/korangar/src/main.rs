@@ -1983,7 +1983,7 @@ impl Client {
                         let visual_id = equipped_item_visual_id(view_id, equipped_position, fallback_visual_item_id);
 
                         if changed_position.intersects(EquipPosition::RIGHT_HAND | EquipPosition::LEFT_RIGHT_HAND) {
-                            entity.set_weapon(visual_id);
+                            entity.set_weapon(visual_id, client_tick);
 
                             if visual_id != 0 && changed_position.intersects(EquipPosition::LEFT_RIGHT_HAND) {
                                 entity.set_shield(0);
@@ -2058,7 +2058,7 @@ impl Client {
                         continue;
                     };
 
-                    entity.set_weapon(weapon);
+                    entity.set_weapon(weapon, client_tick);
 
                     if let Some(animation_data) = self.async_loader.request_animation_data_load(
                         entity.get_entity_id(),

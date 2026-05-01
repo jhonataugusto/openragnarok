@@ -50,6 +50,27 @@ pub fn text(token_stream: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
+pub fn bar(token_stream: TokenStream) -> TokenStream {
+    create_component_macro!(korangar_interface::components::bar::Bar, {
+        text: !,
+        fraction: !,
+        foreground_color: !,
+        fill_color: !,
+        background_color: !,
+        highlight_color: { korangar_interface::theme::theme().text().highlight_color() },
+        height: { 22.0 },
+        corner_diameter: { korangar_interface::theme::theme().window().corner_diameter() },
+        font_size: { korangar_interface::theme::theme().text().font_size() },
+        horizontal_alignment: { korangar_interface::prelude::HorizontalAlignment::Center { offset: 0.0, border: 3.0 } },
+        vertical_alignment: { korangar_interface::prelude::VerticalAlignment::Center { offset: 0.0 } },
+        overflow_behavior: { korangar_interface::theme::theme().text().overflow_behavior() },
+        lerp_duration_ms: { 0u32 },
+    });
+
+    macro_impl(token_stream.into()).into()
+}
+
+#[proc_macro]
 pub fn button(token_stream: TokenStream) -> TokenStream {
     create_component_macro!(korangar_interface::components::button::Button, {
         text: !,

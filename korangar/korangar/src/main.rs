@@ -1597,10 +1597,7 @@ impl Client {
                         client_state().player_name(),
                         // TODO: Check that manually asserting is fine. Technically this window should only
                         // be open while the player is selected.
-                        this_player().manually_asserted().base_level(),
-                        // TODO: Check that manually asserting is fine. Technically this window should only
-                        // be open while the player is selected.
-                        this_player().manually_asserted().job_level(),
+                        this_player().manually_asserted(),
                     ));
                     self.interface
                         .open_window(ChatWindow::new(client_state().chat_window(), client_state().chat_messages()));

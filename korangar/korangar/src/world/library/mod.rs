@@ -25,6 +25,7 @@ pub use self::skill_tree::SkillTreeLayout;
 use crate::loaders::GameFileLoader;
 pub use crate::world::library::skill_information::SkillListInformation;
 pub use crate::world::library::skill_requirements::{SkillListKey, SkillListRequirements};
+use crate::world::weapon_fallback::weapon_fallback;
 
 pub struct Library {
     job_identity_table: <JobIdentity as Table>::Storage,
@@ -78,7 +79,10 @@ impl Library {
     }
 
     pub fn weapon_sprite_name(&self, weapon: u32) -> Option<&str> {
-        self.weapon_sprite_names.get(&weapon).map(String::as_str)
+        self.weapon_sprite_names
+            .get(&weapon)
+            .map(String::as_str)
+            .or_else(|| weapon_fallback(weapon).map(|fallback| fallback.sprite_name))
     }
 
     #[cfg(test)]
@@ -184,6 +188,35 @@ mod tests {
         );
 
         assert!(library.has_visual_sprite_file("인간족\\초보자\\초보자_남_단검"));
+    }
+
+    #[test]
+    fn library_resolves_known_sword_item_id_when_weapon_table_is_missing() {
+        let library = Library::test_new(HashSet::new(), HashMap::new());
+
+        assert_eq!(library.weapon_sprite_name(1101), Some("\u{ac80}"));
+    }
+
+    #[test]
+    fn library_resolves_known_weapon_categories_when_weapon_table_is_missing() {
+        let library = Library::test_new(HashSet::new(), HashMap::new());
+
+        assert_eq!(library.weapon_sprite_name(1201), Some("\u{b2e8}\u{ac80}"));
+        assert_eq!(library.weapon_sprite_name(1250), Some("\u{ce74}\u{d0c0}\u{b974}"));
+        assert_eq!(library.weapon_sprite_name(1301), Some("\u{b3c4}\u{b07c}"));
+        assert_eq!(library.weapon_sprite_name(1401), Some("\u{cc3d}"));
+        assert_eq!(library.weapon_sprite_name(1501), Some("\u{b454}\u{ae30}"));
+        assert_eq!(library.weapon_sprite_name(1601), Some("\u{b86f}\u{b4dc}"));
+        assert_eq!(library.weapon_sprite_name(1701), Some("\u{d65c}"));
+        assert_eq!(library.weapon_sprite_name(1801), Some("\u{b108}\u{d074}"));
+        assert_eq!(library.weapon_sprite_name(1550), Some("\u{cc45}"));
+        assert_eq!(library.weapon_sprite_name(1950), Some("\u{cc44}\u{cc0d}"));
+        assert_eq!(library.weapon_sprite_name(1901), Some("\u{c545}\u{ae30}"));
+        assert_eq!(library.weapon_sprite_name(13300), Some("\u{c218}\u{b9ac}\u{ac80}"));
+        assert_eq!(library.weapon_sprite_name(13100), Some("\u{ad8c}\u{cd1d}"));
+        assert_eq!(library.weapon_sprite_name(13150), Some("\u{b77c}\u{c774}\u{d50c}"));
+        assert_eq!(library.weapon_sprite_name(13157), Some("\u{ae30}\u{ad00}\u{cd1d}"));
+        assert_eq!(library.weapon_sprite_name(13154), Some("\u{c0f7}\u{ac74}"));
     }
 }
 

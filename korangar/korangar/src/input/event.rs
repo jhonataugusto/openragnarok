@@ -3,10 +3,10 @@ use cgmath::Vector2;
 #[cfg(feature = "debug")]
 use korangar_debug::profiling::FrameMeasurement;
 use korangar_interface::event::{ClickHandler, Event, EventQueue};
-use korangar_networking::{InventoryItem, ShopItem};
+use korangar_networking::{InventoryItem, InventoryItemDetails, ShopItem};
 use ragnarok_packets::{
-    AccountId, BuyOrSellOption, CharacterId, CharacterServerInformation, EntityId, HotbarSlot, ShopId, SkillId, SoldItemInformation,
-    StatUpType, TilePosition,
+    AccountId, BuyOrSellOption, CharacterId, CharacterServerInformation, EntityId, EquipPosition, HotbarSlot, InventoryIndex, ShopId,
+    SkillId, SoldItemInformation, StatUpType, TilePosition,
 };
 use rust_state::State;
 
@@ -17,6 +17,47 @@ use crate::state::skills::LearnableSkill;
 #[cfg(feature = "debug")]
 use crate::world::MarkerIdentifier;
 use crate::world::ResourceMetadata;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InventoryItemActivation {
+    Equip { index: InventoryIndex, position: EquipPosition },
+    Unequip { index: InventoryIndex },
+    Use { index: InventoryIndex },
+}
+
+pub fn inventory_item_activation<Meta>(item: &InventoryItem<Meta>) -> Option<InventoryItemActivation> {
+    const ITEM_TYPE_HEALING: u8 = 0;
+    const ITEM_TYPE_USABLE: u8 = 2;
+    const ITEM_TYPE_AMMO: u8 = 10;
+    const ITEM_TYPE_DELAY_CONSUME: u8 = 11;
+
+    match &item.details {
+        InventoryItemDetails::Equippable {
+            equip_position,
+            equipped_position,
+            ..
+        } => match equipped_position.is_empty() {
+            true => Some(InventoryItemActivation::Equip {
+                index: item.index,
+                position: *equip_position,
+            }),
+            false => Some(InventoryItemActivation::Unequip { index: item.index }),
+        },
+        InventoryItemDetails::Regular { equipped_position, .. } if item.item_type == ITEM_TYPE_AMMO => match equipped_position.is_empty() {
+            true => Some(InventoryItemActivation::Equip {
+                index: item.index,
+                position: EquipPosition::AMMO,
+            }),
+            false => Some(InventoryItemActivation::Unequip { index: item.index }),
+        },
+        InventoryItemDetails::Regular { .. }
+            if matches!(item.item_type, ITEM_TYPE_HEALING | ITEM_TYPE_USABLE | ITEM_TYPE_DELAY_CONSUME) =>
+        {
+            Some(InventoryItemActivation::Use { index: item.index })
+        }
+        InventoryItemDetails::Regular { .. } => None,
+    }
+}
 
 /// An event triggered by the user through mouse or keyboard input.
 #[derive(Clone, Debug)]
@@ -162,6 +203,11 @@ pub enum InputEvent {
         /// Destination of the move.
         destination: ItemSource,
         /// Item to move.
+        item: InventoryItem<ResourceMetadata>,
+    },
+    /// Activate an inventory item through a shortcut such as double click.
+    ActivateInventoryItem {
+        /// Item to equip, unequip, or use.
         item: InventoryItem<ResourceMetadata>,
     },
     /// Move a skill in the user interface.
@@ -333,5 +379,117 @@ impl From<InputEvent> for Event<ClientState> {
 impl ClickHandler<ClientState> for InputEvent {
     fn handle_click(&self, _: &State<ClientState>, queue: &mut EventQueue<ClientState>) {
         queue.queue(self.clone());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use korangar_networking::InventoryItemDetails;
+    use ragnarok_packets::{EquipPosition, EquippableItemFlags, InventoryIndex, ItemId, ItemOptions, RegularItemFlags};
+
+    use super::{InventoryItemActivation, inventory_item_activation};
+    use crate::world::ResourceMetadata;
+
+    fn test_metadata() -> ResourceMetadata {
+        ResourceMetadata {
+            texture: None,
+            name: String::new(),
+        }
+    }
+
+    fn regular_item(
+        index: InventoryIndex,
+        item_type: u8,
+        equipped_position: EquipPosition,
+    ) -> korangar_networking::InventoryItem<ResourceMetadata> {
+        korangar_networking::InventoryItem {
+            metadata: test_metadata(),
+            index,
+            item_id: ItemId(1),
+            item_type,
+            slot: [0; 4],
+            hire_expiration_date: 0,
+            details: InventoryItemDetails::Regular {
+                amount: 1,
+                equipped_position,
+                flags: RegularItemFlags::IDENTIFIED,
+            },
+        }
+    }
+
+    fn equippable_item(
+        index: InventoryIndex,
+        equip_position: EquipPosition,
+        equipped_position: EquipPosition,
+    ) -> korangar_networking::InventoryItem<ResourceMetadata> {
+        korangar_networking::InventoryItem {
+            metadata: test_metadata(),
+            index,
+            item_id: ItemId(1),
+            item_type: 5,
+            slot: [0; 4],
+            hire_expiration_date: 0,
+            details: InventoryItemDetails::Equippable {
+                equip_position,
+                equipped_position,
+                bind_on_equip_type: 0,
+                w_item_sprite_number: 0,
+                option_count: 0,
+                option_data: std::array::from_fn(|_| ItemOptions {
+                    index: 0,
+                    value: 0,
+                    parameter: 0,
+                }),
+                refinement_level: 0,
+                enchantment_level: 0,
+                flags: EquippableItemFlags::IDENTIFIED,
+            },
+        }
+    }
+
+    #[test]
+    fn inventory_item_activation_equips_unequipped_equippable() {
+        let item = equippable_item(InventoryIndex(7), EquipPosition::RIGHT_HAND, EquipPosition::NONE);
+
+        assert_eq!(
+            inventory_item_activation(&item),
+            Some(InventoryItemActivation::Equip {
+                index: InventoryIndex(7),
+                position: EquipPosition::RIGHT_HAND,
+            })
+        );
+    }
+
+    #[test]
+    fn inventory_item_activation_unequips_equipped_equippable() {
+        let item = equippable_item(InventoryIndex(8), EquipPosition::RIGHT_HAND, EquipPosition::RIGHT_HAND);
+
+        assert_eq!(
+            inventory_item_activation(&item),
+            Some(InventoryItemActivation::Unequip { index: InventoryIndex(8) })
+        );
+    }
+
+    #[test]
+    fn inventory_item_activation_equips_ammunition() {
+        let item = regular_item(InventoryIndex(9), 10, EquipPosition::NONE);
+
+        assert_eq!(
+            inventory_item_activation(&item),
+            Some(InventoryItemActivation::Equip {
+                index: InventoryIndex(9),
+                position: EquipPosition::AMMO,
+            })
+        );
+    }
+
+    #[test]
+    fn inventory_item_activation_uses_consumable() {
+        let item = regular_item(InventoryIndex(10), 2, EquipPosition::NONE);
+
+        assert_eq!(
+            inventory_item_activation(&item),
+            Some(InventoryItemActivation::Use { index: InventoryIndex(10) })
+        );
     }
 }

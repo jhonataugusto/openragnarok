@@ -3745,6 +3745,14 @@ pub struct AmmunitionActionPacket {
 
 #[derive(Debug, Clone, Packet, ClientPacket, MapServer)]
 #[cfg_attr(feature = "interface", derive(rust_state::RustState, korangar_interface::element::StateElement))]
+#[header(0x0439)]
+pub struct UseItemPacket {
+    pub inventory_index: InventoryIndex,
+    pub account_id: AccountId,
+}
+
+#[derive(Debug, Clone, Packet, ClientPacket, MapServer)]
+#[cfg_attr(feature = "interface", derive(rust_state::RustState, korangar_interface::element::StateElement))]
 #[header(0x00AB)]
 pub struct RequestUnequipItemPacket {
     pub inventory_index: InventoryIndex,

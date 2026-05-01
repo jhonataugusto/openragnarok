@@ -1,6 +1,7 @@
 mod action;
 mod animation;
 mod cameras;
+mod combat_feedback;
 mod effect;
 mod entity;
 mod fade_state;
@@ -14,12 +15,14 @@ mod particles;
 mod pathing;
 mod sound;
 mod video;
+pub(crate) mod weapon_fallback;
 
 use std::sync::Arc;
 
 pub use self::action::*;
 pub use self::animation::*;
 pub use self::cameras::*;
+pub use self::combat_feedback::*;
 pub use self::effect::*;
 pub use self::entity::*;
 pub use self::fade_state::*;

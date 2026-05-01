@@ -1,11 +1,13 @@
 use std::string::String;
 use std::sync::Arc;
+use std::time::Duration;
 
 use arrayvec::ArrayVec;
 use cgmath::{EuclideanSpace, Point3, Vector2, VectorSpace};
 use korangar_audio::{AudioEngine, SoundEffectKey};
 #[cfg(feature = "debug")]
-use korangar_debug::logging::{Colorize, print_debug};
+use korangar_debug::logging::Colorize;
+use korangar_interface::components::bar::SmoothFraction;
 use korangar_interface::element::StateElement;
 use korangar_interface::window::{StateWindow, Window};
 use korangar_networking::EntityData;
@@ -33,8 +35,8 @@ use crate::renderer::MarkerRenderer;
 use crate::state::ClientState;
 use crate::state::theme::{InterfaceThemeType, WorldTheme};
 use crate::world::{
-    ActionEvent, AnimationData, AnimationState, Camera, FadeDirection, FadeState, IsBabyJob, JobIdentity, Library, MAX_WALK_PATH_SIZE, Map,
-    PathFinder,
+    ActionEvent, AnimationData, AnimationState, AttackSoundFeedback, Camera, FadeDirection, FadeState, IsBabyJob, JobIdentity, Library,
+    MAX_WALK_PATH_SIZE, Map, PathFinder, attack_sound_feedback,
 };
 #[cfg(feature = "debug")]
 use crate::world::{MarkerIdentifier, SubMesh};
@@ -45,6 +47,7 @@ const MALE_HAIR_LOOKUP: &[usize] = &[2, 2, 1, 7, 5, 4, 3, 6, 8, 9, 10, 12, 11];
 const FEMALE_HAIR_LOOKUP: &[usize] = &[2, 2, 4, 7, 1, 5, 3, 6, 12, 10, 9, 11, 8];
 const SOUND_COOLDOWN_DURATION: u32 = 200;
 const SPATIAL_SOUND_RANGE: f32 = 250.0;
+const FALLBACK_ATTACK_SOUND_EFFECT: &str = "attack_sword.wav";
 const FADE_IN_DURATION_MS: u32 = 500;
 const BABY_JOB_SCALE: f32 = 0.75;
 const OVERHEAD_MESSAGE_DURATION_MS: u32 = 4000;
@@ -57,6 +60,16 @@ const OVERHEAD_MESSAGE_MIN_WIDTH: f32 = 24.0;
 const OVERHEAD_MESSAGE_HEAD_OFFSET: f32 = 64.0;
 const OVERHEAD_MESSAGE_BACKGROUND_ALPHA: f32 = 0.8;
 const OVERHEAD_MESSAGE_MAX_LINES: usize = 3;
+const STATUS_BAR_LERP_DURATION: Duration = Duration::from_millis(250);
+
+fn smooth_status_value(smooth_fraction: &SmoothFraction, current: usize, maximum: usize) -> f32 {
+    if maximum == 0 {
+        return 0.0;
+    }
+
+    let fraction = smooth_fraction.update(current as f32 / maximum as f32, STATUS_BAR_LERP_DURATION);
+    fraction * maximum as f32
+}
 
 #[derive(Clone)]
 pub enum ResourceState<T> {
@@ -118,6 +131,11 @@ pub enum EntityType {
     Warp,
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum EntityUpdateEvent {
+    AttackFrame { entity_id: EntityId },
+}
+
 impl From<JobId> for EntityType {
     fn from(job_id: JobId) -> Self {
         match job_id.0 {
@@ -135,8 +153,6 @@ impl From<JobId> for EntityType {
 pub struct SoundState {
     previous_key: Option<SoundEffectKey>,
     last_played_at: Option<ClientTick>,
-    #[cfg(feature = "debug")]
-    last_unimplemented_attack_log_at: Option<ClientTick>,
 }
 
 impl SoundState {
@@ -242,6 +258,8 @@ pub struct Common {
     pub job_id: JobId,
     pub health_points: usize,
     pub maximum_health_points: usize,
+    #[hidden_element]
+    pub health_bar_fraction: SmoothFraction,
     pub movement_speed: usize,
     pub direction: Direction,
     pub head_direction: usize,
@@ -513,6 +531,7 @@ fn get_entity_part_files(
 #[cfg(test)]
 mod tests {
     use hashbrown::{HashMap, HashSet};
+    use ragnarok_packets::CharacterId;
 
     use super::*;
 
@@ -539,6 +558,65 @@ mod tests {
         let part_files = get_entity_part_files(&library, EntityType::Player, JobId(0), Sex::Male, Some(1), 1201, 0);
 
         assert!(part_files.contains(&"인간족\\초보자\\초보자_남_단검".to_owned()));
+    }
+    #[test]
+    fn player_update_stat_tracks_currency_and_weight() {
+        let library = Library::test_new(HashSet::new(), HashMap::new());
+        let character_information = CharacterInformation {
+            character_id: CharacterId(1),
+            experience: 0,
+            money: 1234,
+            job_experience: 0,
+            job_level: 1,
+            body_state: 0,
+            health_state: 0,
+            effect_state: 0,
+            virtue: 0,
+            honor: 0,
+            stat_points: 0,
+            health_points: 40,
+            maximum_health_points: 40,
+            spell_points: 12,
+            maximum_spell_points: 12,
+            movement_speed: 150,
+            job_id: JobId(0),
+            head: 0,
+            body: 0,
+            weapon: 0,
+            base_level: 1,
+            sp_point: 0,
+            accessory: 0,
+            shield: 0,
+            accessory2: 0,
+            accessory3: 0,
+            head_palette: 0,
+            body_palette: 0,
+            name: "Test".to_owned(),
+            strength: 1,
+            agility: 1,
+            vitality: 1,
+            intelligence: 1,
+            dexterity: 1,
+            luck: 1,
+            character_number: 0,
+            hair_color: 0,
+            b_is_changed_char: 0,
+            map_name: "prontera.gat".to_owned(),
+            deletion_reverse_date: 0,
+            robe_palette: 0,
+            character_slot_change_count: 0,
+            character_name_change_count: 0,
+            sex: Sex::Male,
+        };
+        let mut player = Player::new(&library, AccountId(1), &character_information, ClientTick(0));
+
+        player.update_stat(StatType::Zeny(5678));
+        player.update_stat(StatType::Weight(1200));
+        player.update_stat(StatType::MaximumWeight(3000));
+
+        assert_eq!(player.zeny, 5678);
+        assert_eq!(player.weight, 1200);
+        assert_eq!(player.maximum_weight, 3000);
     }
 }
 
@@ -587,6 +665,7 @@ impl Common {
             movement_speed,
             health_points,
             maximum_health_points,
+            health_bar_fraction: SmoothFraction::default(),
             animation_data: None,
             details,
             overhead_message: None,
@@ -685,9 +764,16 @@ impl Common {
         self.fade_state.is_fading()
     }
 
-    pub fn update(&mut self, audio_engine: &AudioEngine<GameFileLoader>, map: &Map, camera: &dyn Camera, client_tick: ClientTick) {
+    pub fn update(
+        &mut self,
+        audio_engine: &AudioEngine<GameFileLoader>,
+        map: &Map,
+        camera: &dyn Camera,
+        client_tick: ClientTick,
+    ) -> Option<EntityUpdateEvent> {
         self.update_movement(map, client_tick);
         self.animation_state.update(client_tick);
+        let mut update_event = None;
 
         if self.fade_state.is_fading() && self.fade_state.is_done_fading_in(client_tick) {
             self.fade_state = FadeState::Opaque;
@@ -695,7 +781,7 @@ impl Common {
 
         if let Some(animation_data) = self.animation_data.as_ref() {
             if animation_data.is_animation_over(&self.animation_state)
-                && (self.animation_state.is_attack() || self.animation_state.is_pickup())
+                && (self.animation_state.is_attack() || self.animation_state.is_pickup() || self.animation_state.is_hurt())
             {
                 self.animation_state.recover_finished_action(self.entity_type, client_tick);
             }
@@ -706,30 +792,18 @@ impl Common {
                 Some(ActionEvent::Sound { key }) => {
                     self.sound_state.update(audio_engine, self.world_position, key, client_tick);
                 }
-                Some(ActionEvent::Attack) => {
-                    // TODO: NHA Other clients play the attacker's weapon attack
-                    //       sound at this event. Korangar does not have that
-                    //       mapping yet, so log it in debug builds instead of
-                    //       failing silently.
-                    #[cfg(feature = "debug")]
-                    if self
-                        .sound_state
-                        .last_unimplemented_attack_log_at
-                        .is_none_or(|last_tick| client_tick.0.wrapping_sub(last_tick.0) >= SOUND_COOLDOWN_DURATION)
-                    {
-                        print_debug!(
-                            "[{}] attack sound event has no implementation yet. entity_id={:?} job_id={:?} entity_type={:?}",
-                            "audio".yellow(),
-                            self.entity_id,
-                            self.job_id,
-                            self.entity_type
-                        );
-                        self.sound_state.last_unimplemented_attack_log_at = Some(client_tick);
+                Some(event @ ActionEvent::Attack) => {
+                    if let Some(AttackSoundFeedback::WeaponFallback) = attack_sound_feedback(event, self.entity_type) {
+                        let key = audio_engine.load(FALLBACK_ATTACK_SOUND_EFFECT);
+                        self.sound_state.update(audio_engine, self.world_position, key, client_tick);
                     }
+                    update_event = Some(EntityUpdateEvent::AttackFrame { entity_id: self.entity_id });
                 }
                 None | Some(ActionEvent::Unknown) => { /* Nothing to do */ }
             }
         }
+
+        update_event
     }
 
     fn update_movement(&mut self, map: &Map, client_tick: ClientTick) {
@@ -1165,6 +1239,12 @@ pub struct Player {
     pub activity_points: usize,
     pub maximum_spell_points: usize,
     pub maximum_activity_points: usize,
+    #[hidden_element]
+    pub spell_bar_fraction: SmoothFraction,
+    pub zeny: usize,
+    pub weight: usize,
+    pub maximum_weight: usize,
+    pub job_name: String,
     pub base_level: usize,
     pub job_level: usize,
     pub stat_points: u32,
@@ -1200,11 +1280,15 @@ impl Player {
         let activity_points = 0;
         let maximum_spell_points = character_information.maximum_spell_points as usize;
         let maximum_activity_points = 0;
+        let zeny = character_information.money.max(0) as usize;
+        let weight = 0;
+        let maximum_weight = 0;
         let base_level = character_information.base_level as usize;
         let job_level = character_information.job_level as usize;
         let stat_points = character_information.stat_points as u32;
 
         let entity_data = EntityData::from_character(account_id, character_information, WorldPosition::origin());
+        let job_name = library.get::<JobIdentity>(entity_data.job_id).to_string();
         let tile_position = TilePosition::new(0, 0);
         let position = Point3::origin();
 
@@ -1219,6 +1303,11 @@ impl Player {
             activity_points,
             maximum_spell_points,
             maximum_activity_points,
+            spell_bar_fraction: SmoothFraction::default(),
+            zeny,
+            weight,
+            maximum_weight,
+            job_name,
             base_level,
             job_level,
             stat_points,
@@ -1261,6 +1350,9 @@ impl Player {
             StatType::SpellPoints(value) => self.spell_points = value as usize,
             StatType::ActivityPoints(value) => self.activity_points = value as usize,
             StatType::MaximumActivityPoints(value) => self.maximum_activity_points = value as usize,
+            StatType::Zeny(value) => self.zeny = value as usize,
+            StatType::Weight(value) => self.weight = value as usize,
+            StatType::MaximumWeight(value) => self.maximum_weight = value as usize,
             StatType::MovementSpeed(value) => self.common.movement_speed = value as usize,
             StatType::BaseLevel(value) => self.base_level = value as usize,
             StatType::JobLevel(value) => self.job_level = value as usize,
@@ -1325,6 +1417,12 @@ impl Player {
 
         renderer.render_rectangle(background_position, background_size, theme.status_bar.background_color);
 
+        let displayed_health_points = smooth_status_value(
+            &self.common.health_bar_fraction,
+            self.common.health_points,
+            self.common.maximum_health_points,
+        );
+
         renderer.render_bar(
             final_position,
             ScreenSize {
@@ -1333,10 +1431,12 @@ impl Player {
             },
             theme.status_bar.player_health_color,
             self.common.maximum_health_points as f32,
-            self.common.health_points as f32,
+            displayed_health_points,
         );
 
         offset += gap + theme.status_bar.health_height;
+
+        let displayed_spell_points = smooth_status_value(&self.spell_bar_fraction, self.spell_points, self.maximum_spell_points);
 
         renderer.render_bar(
             final_position + ScreenPosition::only_top(offset),
@@ -1346,7 +1446,7 @@ impl Player {
             },
             theme.status_bar.spell_point_color,
             self.maximum_spell_points as f32,
-            self.spell_points as f32,
+            displayed_spell_points,
         );
 
         offset += gap + theme.status_bar.spell_point_height;
@@ -1452,6 +1552,12 @@ impl Npc {
             theme.status_bar.background_color,
         );
 
+        let displayed_health_points = smooth_status_value(
+            &self.common.health_bar_fraction,
+            self.common.health_points,
+            self.common.maximum_health_points,
+        );
+
         renderer.render_bar(
             final_position,
             ScreenSize {
@@ -1460,7 +1566,7 @@ impl Npc {
             },
             theme.status_bar.enemy_health_color,
             self.common.maximum_health_points as f32,
-            self.common.health_points as f32,
+            displayed_health_points,
         );
     }
 }
@@ -1496,6 +1602,18 @@ impl Entity {
 
     pub fn get_entity_type(&self) -> EntityType {
         self.get_common().entity_type
+    }
+
+    pub fn get_weapon(&self) -> u32 {
+        self.get_common().weapon
+    }
+
+    pub fn is_dead(&self) -> bool {
+        self.get_common().is_dead()
+    }
+
+    pub fn is_attacking(&self) -> bool {
+        self.get_common().animation_state.is_attack()
     }
 
     pub fn is_death_animation_over(&self) -> bool {
@@ -1550,6 +1668,9 @@ impl Entity {
             IsBabyJob(true) => BABY_JOB_SCALE,
             IsBabyJob(false) => 1.0,
         };
+        if let Self::Player(player) = self {
+            player.job_name = library.get::<JobIdentity>(job_id).to_string();
+        }
 
         let common = self.get_common_mut();
         common.job_id = job_id;
@@ -1638,17 +1759,22 @@ impl Entity {
     }
 
     pub fn set_attack(&mut self, attack_duration: u32, critical: bool, client_tick: ClientTick) {
-        let entity_type = self.get_entity_type();
-        self.get_common_mut()
+        let common = self.get_common_mut();
+        common
             .animation_state
-            .attack(entity_type, attack_duration, critical, client_tick);
+            .attack(common.entity_type, common.weapon, attack_duration, critical, client_tick);
     }
 
     pub fn set_attack_recovering_to_ready_fight(&mut self, attack_duration: u32, critical: bool, client_tick: ClientTick) {
-        let entity_type = self.get_entity_type();
-        self.get_common_mut()
+        let common = self.get_common_mut();
+        common
             .animation_state
-            .attack_with_recovery(entity_type, attack_duration, critical, true, client_tick);
+            .attack_with_recovery(common.entity_type, common.weapon, attack_duration, critical, true, client_tick);
+    }
+
+    pub fn set_hurt(&mut self, hurt_duration: u32, client_tick: ClientTick) {
+        let entity_type = self.get_entity_type();
+        self.get_common_mut().animation_state.hurt(entity_type, hurt_duration, client_tick);
     }
 
     pub fn stopped_moving(&self) -> bool {
@@ -1669,8 +1795,14 @@ impl Entity {
         self.get_common_mut().set_overhead_message(text, client_tick);
     }
 
-    pub fn update(&mut self, audio_engine: &AudioEngine<GameFileLoader>, map: &Map, camera: &dyn Camera, client_tick: ClientTick) {
-        self.get_common_mut().update(audio_engine, map, camera, client_tick);
+    pub fn update(
+        &mut self,
+        audio_engine: &AudioEngine<GameFileLoader>,
+        map: &Map,
+        camera: &dyn Camera,
+        client_tick: ClientTick,
+    ) -> Option<EntityUpdateEvent> {
+        self.get_common_mut().update(audio_engine, map, camera, client_tick)
     }
 
     pub fn move_from_to(

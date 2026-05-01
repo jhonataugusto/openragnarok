@@ -51,7 +51,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 
 use cgmath::{Point3, Vector3};
 use image::{EncodableLayout, ImageFormat, ImageReader};
-use input::{MouseInputMode, MouseModeExt};
+use input::{InventoryItemActivation, MouseInputMode, MouseModeExt, inventory_item_activation};
 use korangar_audio::{AudioEngine, SoundEffectKey};
 #[cfg(feature = "debug")]
 use korangar_debug::logging::{Colorize, print_debug};
@@ -122,6 +122,7 @@ use crate::state::{BufferedAction, SelectedServicePath};
 use crate::system::GameTimer;
 #[cfg(feature = "debug")]
 use crate::world::MarkerIdentifier;
+use crate::world::weapon_fallback::{weapon_fallback, weapon_projectile_effect_path};
 use crate::world::*;
 
 const CLIENT_NAME: &str = "Korangar";
@@ -131,6 +132,7 @@ const START_CAMERA_FOCUS_POINT: Point3<f32> = Point3::new(600.0, 0.0, 240.0);
 const DEFAULT_BACKGROUND_MUSIC: Option<&str> = Some("bgm\\01.mp3");
 const MAIN_MENU_CLICK_SOUND_EFFECT: &str = "버튼소리.wav";
 const CINEMATIC_DIALOG_TEXT_SOUND_EFFECT: &str = MAIN_MENU_CLICK_SOUND_EFFECT;
+const COMBAT_HIT_SOUND_RANGE: f32 = 250.0;
 const ITEM_PICKUP_RANGE: AttackRange = AttackRange(1);
 const THIRD_PERSON_TAP_TILE_DISTANCE: i16 = 1;
 const THIRD_PERSON_HOLD_TILE_DISTANCE: i16 = 4;
@@ -160,6 +162,18 @@ struct PendingSkillCast {
     skill_id: SkillId,
     skill_level: SkillLevel,
     skill_type: SkillType,
+}
+
+#[derive(Clone, Copy)]
+struct PendingCombatFeedback {
+    source_entity_id: EntityId,
+    due_tick: ClientTick,
+    target_entity_id: EntityId,
+    damage_amount: Option<usize>,
+    target_hurt_duration: u32,
+    is_critical: bool,
+    hit_sound_path: Option<&'static str>,
+    projectile_effect_path: Option<&'static str>,
 }
 
 /// CTR+C was sent, and the client is supposed to close.
@@ -309,6 +323,7 @@ struct Client {
     input_event_buffer: Vec<InputEvent>,
     network_event_buffer: NetworkEventBuffer,
     pending_skill_cast: Option<PendingSkillCast>,
+    pending_combat_feedback: Vec<PendingCombatFeedback>,
     // TODO: Move or remove this.
     saved_login_data: Option<LoginServerLoginData>,
     // TODO: Move or remove this.
@@ -424,9 +439,16 @@ impl ThirdPersonMovementState {
 }
 
 fn equipped_item_visual_id(view_id: u16, equipped_position: EquipPosition, fallback_visual_item_id: Option<u32>) -> u32 {
-    match (view_id, equipped_position == EquipPosition::NONE) {
-        (0, false) => fallback_visual_item_id.unwrap_or(0),
-        _ => view_id as u32,
+    if equipped_position == EquipPosition::NONE {
+        return 0;
+    }
+
+    let view_id = view_id as u32;
+    match (view_id, fallback_visual_item_id) {
+        (0, Some(item_id)) => item_id,
+        (0, None) => 0,
+        (view_id, Some(item_id)) if weapon_fallback(view_id).is_none() => item_id,
+        (view_id, _) => view_id,
     }
 }
 
@@ -485,10 +507,18 @@ mod third_person_movement_tests {
     }
 
     #[test]
-    fn equip_visual_id_keeps_server_view_id_when_it_is_present() {
+    fn equip_visual_id_keeps_known_server_weapon_view_id_when_it_is_present() {
         assert_eq!(
-            equipped_item_visual_id(42, ragnarok_packets::EquipPosition::RIGHT_HAND, Some(1201)),
-            42
+            equipped_item_visual_id(1101, ragnarok_packets::EquipPosition::RIGHT_HAND, Some(1201)),
+            1101
+        );
+    }
+
+    #[test]
+    fn equip_visual_id_prefers_item_id_when_server_view_id_is_not_a_known_weapon() {
+        assert_eq!(
+            equipped_item_visual_id(42, ragnarok_packets::EquipPosition::RIGHT_HAND, Some(13100)),
+            13100
         );
     }
 
@@ -966,6 +996,7 @@ impl Client {
             input_event_buffer,
             network_event_buffer,
             pending_skill_cast: None,
+            pending_combat_feedback: Vec::new(),
             saved_login_data,
             saved_character_server,
             saved_login_server_address,
@@ -1001,6 +1032,117 @@ impl Client {
             map: Some(map),
             client_state,
         })
+    }
+
+    fn apply_target_damage_feedback(&mut self, feedback: PendingCombatFeedback, client_tick: ClientTick) -> Option<Point3<f32>> {
+        if let Some(entity) = self
+            .client_state
+            .follow_mut(client_state().entities())
+            .iter_mut()
+            .find(|entity| entity.get_entity_id() == feedback.target_entity_id)
+        {
+            let position = entity.get_position();
+
+            if let Some(TargetDamageFeedback::Hurt { duration }) =
+                target_damage_feedback(feedback.damage_amount, feedback.target_hurt_duration, entity.is_dead())
+            {
+                entity.set_hurt(duration, client_tick);
+            }
+
+            return Some(position);
+        }
+
+        self.client_state
+            .try_follow_mut(this_entity())
+            .filter(|entity| entity.get_entity_id() == feedback.target_entity_id)
+            .map(|entity| {
+                let position = entity.get_position();
+
+                if let Some(TargetDamageFeedback::Hurt { duration }) =
+                    target_damage_feedback(feedback.damage_amount, feedback.target_hurt_duration, entity.is_dead())
+                {
+                    entity.set_hurt(duration, client_tick);
+                }
+
+                position
+            })
+    }
+
+    fn apply_combat_feedback(&mut self, feedback: PendingCombatFeedback, client_tick: ClientTick) {
+        let Some(position) = self.apply_target_damage_feedback(feedback, client_tick) else {
+            return;
+        };
+
+        if let Some(path) = feedback.hit_sound_path {
+            let sound_effect_key = self.audio_engine.load(path);
+            self.audio_engine
+                .play_spatial_sound_effect(sound_effect_key, position, COMBAT_HIT_SOUND_RANGE);
+        }
+
+        if let Some(path) = feedback.projectile_effect_path
+            && let Ok(effect) = self.effect_loader.get_or_load(path, &self.texture_loader)
+        {
+            let frame_timer = effect.new_frame_timer();
+
+            self.effect_holder.add_effect(Box::new(EffectWithLight::new(
+                effect,
+                frame_timer,
+                EffectCenter::Position(position),
+                Vector3::new(0.0, 9.0, 0.0),
+                PointLightId::new(feedback.source_entity_id.0),
+                Vector3::new(0.0, 12.0, 0.0),
+                Color::WHITE,
+                0.0,
+                false,
+            )));
+        }
+
+        let particle: Box<dyn Particle + Send + Sync> = match feedback.damage_amount {
+            Some(amount) => Box::new(DamageNumber::new(position, amount.to_string(), feedback.is_critical)),
+            None => Box::new(Miss::new(position)),
+        };
+
+        self.particle_holder.spawn_particle(particle);
+    }
+
+    fn combat_source_is_attacking(&self, source_entity_id: EntityId) -> bool {
+        self.client_state
+            .follow(client_state().entities())
+            .iter()
+            .find(|entity| entity.get_entity_id() == source_entity_id)
+            .or_else(|| {
+                self.client_state
+                    .try_follow(this_entity())
+                    .filter(|entity| entity.get_entity_id() == source_entity_id)
+            })
+            .is_some_and(Entity::is_attacking)
+    }
+
+    fn process_attack_frame_combat_feedback(&mut self, source_entity_id: EntityId, client_tick: ClientTick) {
+        if let Some(index) = self
+            .pending_combat_feedback
+            .iter()
+            .position(|feedback| feedback.source_entity_id == source_entity_id)
+        {
+            let feedback = self.pending_combat_feedback.remove(index);
+            self.apply_combat_feedback(feedback, client_tick);
+        }
+    }
+
+    fn process_pending_combat_feedback(&mut self, client_tick: ClientTick) {
+        let mut index = 0;
+
+        while index < self.pending_combat_feedback.len() {
+            let feedback = self.pending_combat_feedback[index];
+            let source_still_attacking = self.combat_source_is_attacking(feedback.source_entity_id);
+
+            if timed_combat_feedback_is_due(client_tick, feedback.due_tick, source_still_attacking) {
+                let feedback = self.pending_combat_feedback.remove(index);
+                self.apply_combat_feedback(feedback, client_tick);
+            } else {
+                index += 1;
+            }
+        }
     }
 
     fn render_frame(&mut self, event_loop: &ActiveEventLoop) {
@@ -1229,6 +1371,7 @@ impl Client {
                     self.map = None;
 
                     self.particle_holder.clear();
+                    self.pending_combat_feedback.clear();
                     self.effect_holder.clear();
                     self.point_light_manager.clear();
                     self.audio_engine.clear_ambient_sound();
@@ -1408,6 +1551,7 @@ impl Client {
                     self.map = None;
 
                     self.particle_holder.clear();
+                    self.pending_combat_feedback.clear();
                     self.effect_holder.clear();
                     self.point_light_manager.clear();
                     self.audio_engine.clear_ambient_sound();
@@ -1621,6 +1765,7 @@ impl Client {
                 NetworkEvent::ChangeMap { map_name, position } => {
                     self.map = None;
                     self.particle_holder.clear();
+                    self.pending_combat_feedback.clear();
                     self.effect_holder.clear();
                     self.point_light_manager.clear();
                     self.audio_engine.clear_ambient_sound();
@@ -1720,6 +1865,7 @@ impl Client {
                     destination_entity_id,
                     damage_amount,
                     attack_duration,
+                    damage_delay,
                     is_critical,
                 } => {
                     let target_position = self
@@ -1728,6 +1874,38 @@ impl Client {
                         .iter()
                         .find(|entity| entity.get_entity_id() == destination_entity_id)
                         .map(|entity| entity.get_tile_position());
+
+                    let hit_sound_feedback = self
+                        .client_state
+                        .follow(client_state().entities())
+                        .iter()
+                        .find(|entity| entity.get_entity_id() == source_entity_id)
+                        .or_else(|| {
+                            self.client_state
+                                .try_follow(this_entity())
+                                .filter(|entity| entity.get_entity_id() == source_entity_id)
+                        })
+                        .and_then(|entity| {
+                            let weapon = entity.get_weapon();
+                            weapon_hit_sound_feedback(
+                                entity.get_entity_type(),
+                                weapon,
+                                self.library.weapon_sprite_name(weapon),
+                                damage_amount,
+                            )
+                        });
+
+                    let projectile_effect_path = self
+                        .client_state
+                        .follow(client_state().entities())
+                        .iter()
+                        .find(|entity| entity.get_entity_id() == source_entity_id)
+                        .or_else(|| {
+                            self.client_state
+                                .try_follow(this_entity())
+                                .filter(|entity| entity.get_entity_id() == source_entity_id)
+                        })
+                        .and_then(|entity| weapon_projectile_effect_path(entity.get_weapon()));
 
                     // Auto attack logic.
                     if self
@@ -1775,20 +1953,18 @@ impl Client {
                         }
                     }
 
-                    if let Some(entity) = self
-                        .client_state
-                        .follow(client_state().entities())
-                        .iter()
-                        .find(|entity| entity.get_entity_id() == destination_entity_id)
-                        .or_else(|| self.client_state.try_follow(this_entity()))
-                    {
-                        let particle: Box<dyn Particle + Send + Sync> = match damage_amount {
-                            Some(amount) => Box::new(DamageNumber::new(entity.get_position(), amount.to_string(), is_critical)),
-                            None => Box::new(Miss::new(entity.get_position())),
-                        };
-
-                        self.particle_holder.spawn_particle(particle);
-                    }
+                    self.pending_combat_feedback.push(PendingCombatFeedback {
+                        source_entity_id,
+                        due_tick: combat_feedback_due_tick(client_tick, damage_delay),
+                        target_entity_id: destination_entity_id,
+                        damage_amount,
+                        target_hurt_duration: damage_delay,
+                        is_critical,
+                        hit_sound_path: hit_sound_feedback.map(|feedback| match feedback {
+                            HitSoundFeedback::SoundEffect { path } => path,
+                        }),
+                        projectile_effect_path,
+                    });
                 }
                 NetworkEvent::EntityPickUpItem { entity_id, item_entity_id } => {
                     let item_position = self
@@ -2518,7 +2694,10 @@ impl Client {
                     if self.client_state.try_follow(this_entity()).is_some() {
                         match self.interface.is_window_with_class_open(WindowClass::Inventory) {
                             true => self.interface.close_window_with_class(WindowClass::Inventory),
-                            false => self.interface.open_window(InventoryWindow::new(client_state().inventory().items())),
+                            false => self.interface.open_window(InventoryWindow::new(
+                                client_state().inventory_window(),
+                                client_state().inventory().items(),
+                            )),
                         }
                     }
                 }
@@ -2646,7 +2825,7 @@ impl Client {
                     if let Some(entity) = entity {
                         let _ = match entity.get_entity_type() {
                             EntityType::Npc => self.networking_system.start_dialog(entity_id),
-                            EntityType::Monster => {
+                            EntityType::Monster | EntityType::Player => {
                                 let auto_attack = *self.client_state.follow(client_state().game_settings().auto_attack());
                                 let buffered_action = self.client_state.follow_mut(client_state().buffered_action());
 
@@ -2765,6 +2944,20 @@ impl Client {
                         let _ = self.networking_system.request_item_unequip(item.index);
                     }
                     _ => {}
+                },
+                InputEvent::ActivateInventoryItem { item } => match inventory_item_activation(&item) {
+                    Some(InventoryItemActivation::Equip { index, position }) => {
+                        let _ = self.networking_system.request_item_equip(index, position);
+                    }
+                    Some(InventoryItemActivation::Unequip { index }) => {
+                        let _ = self.networking_system.request_item_unequip(index);
+                    }
+                    Some(InventoryItemActivation::Use { index }) => {
+                        if let Some(login_data) = &self.saved_login_data {
+                            let _ = self.networking_system.request_item_use(index, login_data.account_id);
+                        }
+                    }
+                    None => {}
                 },
                 InputEvent::MoveSkill {
                     source,
@@ -3264,6 +3457,8 @@ impl Client {
             );
         }
 
+        let mut entity_update_events = Vec::new();
+
         // Main map update and render loop
         if let Some(map) = self.map.as_ref() {
             #[cfg(feature = "debug")]
@@ -3355,13 +3550,16 @@ impl Client {
                 self.client_state
                     .follow_mut(client_state().entities())
                     .iter_mut()
-                    .for_each(|entity| entity.update(&self.audio_engine, self.map.as_ref().unwrap(), current_camera, client_tick));
+                    .filter_map(|entity| entity.update(&self.audio_engine, self.map.as_ref().unwrap(), current_camera, client_tick))
+                    .for_each(|event| entity_update_events.push(event));
 
                 self.client_state
                     .follow_mut(client_state().dead_entities())
                     .iter_mut()
                     .for_each(|entity| {
-                        entity.update(&self.audio_engine, self.map.as_ref().unwrap(), current_camera, client_tick);
+                        if let Some(event) = entity.update(&self.audio_engine, self.map.as_ref().unwrap(), current_camera, client_tick) {
+                            entity_update_events.push(event);
+                        }
 
                         if entity.is_death_animation_over() && !entity.is_fading() {
                             entity.fade_out(DisappearanceReason::Died, client_tick);
@@ -3874,7 +4072,7 @@ impl Client {
                                     .map(|entity| match entity.get_entity_type() {
                                         EntityType::Npc => MouseCursorState::Dialog,
                                         EntityType::Warp => MouseCursorState::Warp,
-                                        EntityType::Monster => MouseCursorState::Attack,
+                                        EntityType::Monster | EntityType::Player => MouseCursorState::Attack,
                                         _ => MouseCursorState::Default,
                                     })
                                     .unwrap_or(MouseCursorState::Default)
@@ -4208,6 +4406,15 @@ impl Client {
             #[cfg(feature = "debug")]
             render_frame_measurement.stop();
         }
+
+        for event in entity_update_events {
+            match event {
+                EntityUpdateEvent::AttackFrame { entity_id } => {
+                    self.process_attack_frame_combat_feedback(entity_id, client_tick);
+                }
+            }
+        }
+        self.process_pending_combat_feedback(client_tick);
 
         // Unset the highlighted skill just before applying. That way, if the skill is
         // still hovered the value will be the same as before, if not it will clear the

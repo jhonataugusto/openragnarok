@@ -42,6 +42,7 @@ fn display_skill_effect_and_damage_packet_to_event(packet: DisplaySkillEffectAnd
         destination_entity_id: packet.destination_entity_id,
         damage_amount: (packet.damage > 0).then_some(packet.damage as usize),
         attack_duration: animation_duration(packet.soruce_delay, packet.destination_delay),
+        damage_delay: packet.destination_delay.max(1),
         is_critical: matches!(packet.skill_type, DMG_CRITICAL | DMG_MULTI_HIT_CRITICAL),
     }
 }
@@ -145,6 +146,7 @@ mod tests {
             destination_entity_id,
             damage_amount,
             attack_duration,
+            damage_delay,
             is_critical,
         } = event
         else {
@@ -155,6 +157,7 @@ mod tests {
         assert_eq!(destination_entity_id, EntityId(2));
         assert_eq!(damage_amount, Some(321));
         assert_eq!(attack_duration, 450);
+        assert_eq!(damage_delay, 150);
         assert!(!is_critical);
     }
 
@@ -786,6 +789,7 @@ where
             destination_entity_id: packet.destination_entity_id,
             damage_amount: (packet.damage_amount > 0).then_some(packet.damage_amount as usize),
             attack_duration: packet.attack_duration,
+            damage_delay: packet.damage_delay,
             is_critical: false,
         }),
         DamageType::CriticalHit => Some(NetworkEvent::DamageEffect {
@@ -793,6 +797,7 @@ where
             destination_entity_id: packet.destination_entity_id,
             damage_amount: (packet.damage_amount > 0).then_some(packet.damage_amount as usize),
             attack_duration: packet.attack_duration,
+            damage_delay: packet.damage_delay,
             is_critical: true,
         }),
         DamageType::PickUpItem => Some(NetworkEvent::EntityPickUpItem {
@@ -810,6 +815,7 @@ where
             destination_entity_id: packet.destination_entity_id,
             damage_amount: (packet.damage_amount > 0).then_some(packet.damage_amount as usize),
             attack_duration: packet.attack_duration,
+            damage_delay: packet.damage_delay,
             is_critical: false,
         }),
         DamageType::CriticalHit => Some(NetworkEvent::DamageEffect {
@@ -817,6 +823,7 @@ where
             destination_entity_id: packet.destination_entity_id,
             damage_amount: (packet.damage_amount > 0).then_some(packet.damage_amount as usize),
             attack_duration: packet.attack_duration,
+            damage_delay: packet.damage_delay,
             is_critical: true,
         }),
         DamageType::PickUpItem => Some(NetworkEvent::EntityPickUpItem {

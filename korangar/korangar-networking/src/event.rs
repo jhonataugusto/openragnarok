@@ -155,6 +155,7 @@ pub enum NetworkEvent {
         /// Damage amount. [`None`] on miss, [`Some`] otherwise.
         damage_amount: Option<usize>,
         attack_duration: u32,
+        damage_delay: u32,
         is_critical: bool,
     },
     EntityPickUpItem {

@@ -12,7 +12,7 @@ use winit::dpi::PhysicalPosition;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta};
 use winit::keyboard::KeyCode;
 
-pub use self::event::InputEvent;
+pub use self::event::{InputEvent, InventoryItemActivation, inventory_item_activation};
 pub use self::key::Key;
 pub use self::mode::{Grabbed, MouseInputMode, MouseModeExt};
 use crate::graphics::{PickerTarget, ScreenPosition, ScreenSize};

@@ -6,6 +6,7 @@ use korangar_interface::element::StateElement;
 use ragnarok_packets::{ClientTick, Direction, EntityId};
 use rust_state::RustState;
 
+use super::weapon_fallback::{WeaponAttackAction, weapon_fallback};
 #[cfg(feature = "debug")]
 use crate::graphics::DebugRectangleInstruction;
 use crate::graphics::{Color, EntityInstruction};
@@ -76,7 +77,7 @@ mod tests {
     fn attack_duration_is_never_zero() {
         let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
 
-        animation_state.attack(EntityType::Player, 0, false, ClientTick(10));
+        animation_state.attack(EntityType::Player, 0, 0, false, ClientTick(10));
 
         assert_eq!(animation_state.duration, Some(1));
     }
@@ -85,7 +86,7 @@ mod tests {
     fn attack_can_recover_to_ready_fight() {
         let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
 
-        animation_state.attack_with_recovery(EntityType::Player, 150, false, true, ClientTick(10));
+        animation_state.attack_with_recovery(EntityType::Player, 0, 150, false, true, ClientTick(10));
         animation_state.recover_finished_action(EntityType::Player, ClientTick(160));
 
         assert_eq!(animation_state.action_type, AnimationActionType::ReadyFight);
@@ -96,11 +97,96 @@ mod tests {
     fn attack_recovers_to_idle_by_default() {
         let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
 
-        animation_state.attack(EntityType::Player, 150, false, ClientTick(10));
+        animation_state.attack(EntityType::Player, 0, 150, false, ClientTick(10));
         animation_state.recover_finished_action(EntityType::Player, ClientTick(160));
 
         assert_eq!(animation_state.action_type, AnimationActionType::Idle);
         assert!(animation_state.looping);
+    }
+
+    #[test]
+    fn armed_player_attack_uses_weapon_action() {
+        let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
+
+        animation_state.attack(EntityType::Player, 1, 150, false, ClientTick(10));
+
+        assert_eq!(animation_state.action_type, AnimationActionType::Attack3);
+        assert_eq!(animation_state.action_base_offset, 11);
+    }
+
+    #[test]
+    fn sword_player_attack_uses_short_weapon_action() {
+        let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
+
+        animation_state.attack(EntityType::Player, 1101, 150, false, ClientTick(10));
+
+        assert_eq!(animation_state.action_type, AnimationActionType::Attack2);
+        assert_eq!(animation_state.action_base_offset, 10);
+    }
+
+    #[test]
+    fn spear_player_attack_uses_long_weapon_action() {
+        let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
+
+        animation_state.attack(EntityType::Player, 1401, 150, false, ClientTick(10));
+
+        assert_eq!(animation_state.action_type, AnimationActionType::Attack3);
+        assert_eq!(animation_state.action_base_offset, 11);
+    }
+
+    #[test]
+    fn unarmed_player_attack_uses_unarmed_action() {
+        let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
+
+        animation_state.attack(EntityType::Player, 0, 150, false, ClientTick(10));
+
+        assert_eq!(animation_state.action_type, AnimationActionType::Attack1);
+        assert_eq!(animation_state.action_base_offset, 5);
+    }
+
+    #[test]
+    fn monster_critical_attack_keeps_monster_attack_action() {
+        let mut animation_state = AnimationState::new(EntityType::Monster, ClientTick(0));
+
+        animation_state.attack(EntityType::Monster, 0, 150, true, ClientTick(10));
+
+        assert_eq!(animation_state.action_type, AnimationActionType::Attack1);
+        assert_eq!(animation_state.action_base_offset, 2);
+    }
+
+    #[test]
+    fn hurt_uses_hurt_action() {
+        let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
+
+        animation_state.hurt(EntityType::Player, 200, ClientTick(10));
+
+        assert_eq!(animation_state.action_type, AnimationActionType::Hurt);
+        assert_eq!(
+            animation_state.action_base_offset,
+            AnimationActionType::Hurt.action_base_offset(EntityType::Player)
+        );
+        assert_eq!(animation_state.duration, Some(200));
+        assert!(!animation_state.looping);
+    }
+
+    #[test]
+    fn hurt_recovers_to_idle() {
+        let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
+
+        animation_state.hurt(EntityType::Player, 150, ClientTick(10));
+        animation_state.recover_finished_action(EntityType::Player, ClientTick(160));
+
+        assert_eq!(animation_state.action_type, AnimationActionType::Idle);
+        assert!(animation_state.looping);
+    }
+
+    #[test]
+    fn hurt_is_transient_action() {
+        let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
+
+        animation_state.hurt(EntityType::Player, 150, ClientTick(10));
+
+        assert!(animation_state.is_hurt());
     }
 }
 
@@ -141,21 +227,32 @@ impl AnimationState {
         self.recover_to_ready_fight = false;
     }
 
-    pub fn attack(&mut self, entity_type: EntityType, attack_duration: u32, critical: bool, client_tick: ClientTick) {
-        self.attack_with_recovery(entity_type, attack_duration, critical, false, client_tick);
+    pub fn attack(&mut self, entity_type: EntityType, weapon: u32, attack_duration: u32, critical: bool, client_tick: ClientTick) {
+        self.attack_with_recovery(entity_type, weapon, attack_duration, critical, false, client_tick);
+    }
+
+    pub fn hurt(&mut self, entity_type: EntityType, hurt_duration: u32, client_tick: ClientTick) {
+        self.action_type = AnimationActionType::Hurt;
+        self.action_base_offset = self.action_type.action_base_offset(entity_type);
+        self.start_time = client_tick;
+        self.duration = Some(hurt_duration.max(1));
+        self.factor = None;
+        self.looping = false;
+        self.recover_to_ready_fight = false;
     }
 
     pub fn attack_with_recovery(
         &mut self,
         entity_type: EntityType,
+        weapon: u32,
         attack_duration: u32,
-        critical: bool,
+        _critical: bool,
         recover_to_ready_fight: bool,
         client_tick: ClientTick,
     ) {
-        self.action_type = match critical {
-            true => AnimationActionType::Attack3,
-            false => AnimationActionType::Attack1,
+        self.action_type = match (entity_type, weapon != 0) {
+            (EntityType::Player | EntityType::Hidden, true) => weapon_attack_action(weapon),
+            _ => AnimationActionType::Attack1,
         };
         self.action_base_offset = self.action_type.action_base_offset(entity_type);
         self.start_time = client_tick;
@@ -224,6 +321,10 @@ impl AnimationState {
         self.action_type == AnimationActionType::Pickup
     }
 
+    pub fn is_hurt(&self) -> bool {
+        self.action_type == AnimationActionType::Hurt
+    }
+
     pub fn is_walking(&self) -> bool {
         self.action_type == AnimationActionType::Walk
     }
@@ -234,6 +335,13 @@ impl AnimationState {
 
     pub fn update(&mut self, client_tick: ClientTick) {
         self.time = client_tick.0.wrapping_sub(self.start_time.0);
+    }
+}
+
+fn weapon_attack_action(weapon: u32) -> AnimationActionType {
+    match weapon_fallback(weapon).map(|fallback| fallback.attack_action) {
+        Some(WeaponAttackAction::Attack2) => AnimationActionType::Attack2,
+        Some(WeaponAttackAction::Attack3) | None => AnimationActionType::Attack3,
     }
 }
 

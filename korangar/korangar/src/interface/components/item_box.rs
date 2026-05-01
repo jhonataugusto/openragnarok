@@ -3,6 +3,7 @@ use korangar_interface::element::store::{ElementStore, ElementStoreMut};
 use korangar_interface::element::{BaseLayoutInfo, Element};
 use korangar_interface::event::{ClickHandler, DropHandler, Event, EventQueue};
 use korangar_interface::layout::area::Area;
+use korangar_interface::layout::tooltip::TooltipExt;
 use korangar_interface::layout::{MouseButton, Resolvers, WindowLayout, with_single_resolver};
 use korangar_interface::prelude::{HorizontalAlignment, VerticalAlignment};
 use korangar_networking::{InventoryItem, InventoryItemDetails};
@@ -13,7 +14,8 @@ use crate::input::{InputEvent, MouseInputMode};
 use crate::interface::resource::ItemSource;
 use crate::loaders::{FontSize, OverflowBehavior};
 use crate::renderer::LayoutExt;
-use crate::state::ClientState;
+use crate::state::inventory::InventoryPathExt;
+use crate::state::{ClientState, ClientStatePathExt, client_state};
 use crate::world::ResourceMetadata;
 
 #[derive(Default)]
@@ -34,11 +36,22 @@ impl AmountDisplay {
 struct ItemBoxHandler<P> {
     item_path: P,
     source: ItemSource,
+    click_action: ItemBoxClickAction,
+}
+
+#[derive(Clone, Copy)]
+enum ItemBoxClickAction {
+    Move,
+    Activate,
 }
 
 impl<P> ItemBoxHandler<P> {
-    fn new(item_path: P, source: ItemSource) -> Self {
-        Self { item_path, source }
+    fn new(item_path: P, source: ItemSource, click_action: ItemBoxClickAction) -> Self {
+        Self {
+            item_path,
+            source,
+            click_action,
+        }
     }
 }
 
@@ -51,11 +64,14 @@ where
         // item.
         let item = state.try_get(&self.item_path).unwrap().clone();
 
-        queue.queue(Event::SetMouseMode {
-            mouse_mode: MouseMode::Custom {
-                mode: MouseInputMode::MoveItem { item, source: self.source },
-            },
-        });
+        match self.click_action {
+            ItemBoxClickAction::Move => queue.queue(Event::SetMouseMode {
+                mouse_mode: MouseMode::Custom {
+                    mode: MouseInputMode::MoveItem { item, source: self.source },
+                },
+            }),
+            ItemBoxClickAction::Activate => queue.queue(InputEvent::ActivateInventoryItem { item }),
+        }
     }
 }
 
@@ -79,8 +95,11 @@ where
 
 pub struct ItemBox<A> {
     item_path: A,
-    handler: ItemBoxHandler<A>,
+    move_handler: ItemBoxHandler<A>,
+    activate_handler: ItemBoxHandler<A>,
     amount_display: AmountDisplay,
+    refinement_display: AmountDisplay,
+    tooltip_text: String,
 }
 
 impl<A> ItemBox<A>
@@ -93,8 +112,11 @@ where
     pub fn component_new(item_path: A, source: ItemSource) -> Self {
         Self {
             item_path,
-            handler: ItemBoxHandler::new(item_path, source),
+            move_handler: ItemBoxHandler::new(item_path, source, ItemBoxClickAction::Move),
+            activate_handler: ItemBoxHandler::new(item_path, source, ItemBoxClickAction::Activate),
             amount_display: AmountDisplay::default(),
+            refinement_display: AmountDisplay::default(),
+            tooltip_text: String::new(),
         }
     }
 }
@@ -114,11 +136,20 @@ where
         with_single_resolver(resolvers, |resolver| {
             let area = resolver.with_height(40.0);
 
-            if let Some(item) = state.try_get(&self.item_path)
-                && item.metadata.texture.as_ref().is_some()
-                && let InventoryItemDetails::Regular { amount, .. } = &item.details
-            {
-                self.amount_display.update(*amount);
+            if let Some(item) = state.try_get(&self.item_path) {
+                self.tooltip_text = item_tooltip_text(item, state.get(&client_state().inventory().items()));
+
+                if item.metadata.texture.as_ref().is_some()
+                    && let InventoryItemDetails::Regular { amount, .. } = &item.details
+                {
+                    self.amount_display.update(*amount);
+                }
+
+                if let InventoryItemDetails::Equippable { refinement_level, .. } = &item.details
+                    && *refinement_level > 0
+                {
+                    self.refinement_display.update(*refinement_level as u16);
+                }
             }
 
             Self::LayoutInfo { area }
@@ -160,7 +191,7 @@ where
         );
 
         if is_hovered {
-            layout.register_drop_handler(&self.handler);
+            layout.register_drop_handler(&self.move_handler);
         }
 
         if let Some(item) = state.try_get(&self.item_path)
@@ -177,7 +208,39 @@ where
             layout.add_texture(texture_area, texture.clone(), Color::WHITE, false);
 
             if is_hovered {
-                layout.register_click_handler(MouseButton::Left, &self.handler);
+                layout.register_click_handler(MouseButton::Left, &self.move_handler);
+                layout.register_click_handler(MouseButton::DoubleLeft, &self.activate_handler);
+                layout.add_tooltip(&self.tooltip_text, self.tooltip_id());
+            }
+
+            if item_is_equipped(item) {
+                layout.add_text(
+                    layout_info.area,
+                    "E",
+                    FontSize(12.0),
+                    Color::rgb_u8(120, 255, 180),
+                    Color::rgb_u8(10, 40, 20),
+                    HorizontalAlignment::Left { offset: 3.0, border: 3.0 },
+                    VerticalAlignment::Top { offset: 3.0 },
+                    OverflowBehavior::Shrink,
+                );
+            }
+
+            if let InventoryItemDetails::Equippable { refinement_level, .. } = item.details
+                && refinement_level > 0
+            {
+                let refine_text = self.refinement_display.string.as_ref().unwrap();
+
+                layout.add_text(
+                    layout_info.area,
+                    refine_text,
+                    FontSize(12.0),
+                    Color::rgb_u8(255, 220, 120),
+                    Color::rgb_u8(60, 40, 10),
+                    HorizontalAlignment::Right { offset: 3.0, border: 3.0 },
+                    VerticalAlignment::Top { offset: 3.0 },
+                    OverflowBehavior::Shrink,
+                );
             }
 
             if matches!(item.details, InventoryItemDetails::Regular { .. }) {
@@ -199,4 +262,78 @@ where
             }
         }
     }
+}
+
+fn item_is_equipped(item: &InventoryItem<ResourceMetadata>) -> bool {
+    match item.details {
+        InventoryItemDetails::Regular { equipped_position, .. } => !equipped_position.is_empty(),
+        InventoryItemDetails::Equippable { equipped_position, .. } => !equipped_position.is_empty(),
+    }
+}
+
+fn item_tooltip_text(item: &InventoryItem<ResourceMetadata>, inventory: &[InventoryItem<ResourceMetadata>]) -> String {
+    let mut lines = Vec::new();
+    let name = match item.metadata.name.is_empty() {
+        true => format!("Item {}", item.item_id.0),
+        false => item.metadata.name.clone(),
+    };
+
+    lines.push(name);
+    lines.push(format!("ID: {} | Tipo: {}", item.item_id.0, item.item_type));
+
+    match &item.details {
+        InventoryItemDetails::Regular {
+            amount, equipped_position, ..
+        } => {
+            lines.push(format!("Qtd: {amount}"));
+            if !equipped_position.is_empty() {
+                lines.push("Equipado".to_string());
+            }
+        }
+        InventoryItemDetails::Equippable {
+            equip_position,
+            equipped_position,
+            refinement_level,
+            w_item_sprite_number,
+            ..
+        } => {
+            lines.push(format!("Slot: {}", equip_position.bits()));
+            if *refinement_level > 0 {
+                lines.push(format!("Refino: +{refinement_level}"));
+            }
+            if *w_item_sprite_number > 0 {
+                lines.push(format!("Visual: {w_item_sprite_number}"));
+            }
+            if !equipped_position.is_empty() {
+                lines.push("Equipado".to_string());
+            } else if let Some(current_item) = equipped_item_for_slot(inventory, item.index, *equip_position) {
+                let current_name = match current_item.metadata.name.is_empty() {
+                    true => format!("Item {}", current_item.item_id.0),
+                    false => current_item.metadata.name.clone(),
+                };
+                let current_refinement = match current_item.details {
+                    InventoryItemDetails::Equippable { refinement_level, .. } if refinement_level > 0 => format!(" +{refinement_level}"),
+                    _ => String::new(),
+                };
+
+                lines.push(format!("Atual: {current_name}{current_refinement}"));
+            }
+        }
+    }
+
+    lines.join("\n")
+}
+
+fn equipped_item_for_slot(
+    inventory: &[InventoryItem<ResourceMetadata>],
+    item_index: ragnarok_packets::InventoryIndex,
+    equip_position: ragnarok_packets::EquipPosition,
+) -> Option<&InventoryItem<ResourceMetadata>> {
+    inventory.iter().find(|current_item| {
+        current_item.index != item_index
+            && match current_item.details {
+                InventoryItemDetails::Equippable { equipped_position, .. } => equipped_position.intersects(equip_position),
+                InventoryItemDetails::Regular { .. } => false,
+            }
+    })
 }

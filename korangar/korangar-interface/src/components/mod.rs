@@ -1,3 +1,4 @@
+pub mod bar;
 pub mod button;
 pub mod collapsible;
 pub mod drop_down;

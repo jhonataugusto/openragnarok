@@ -41,8 +41,8 @@ use crate::graphics::RenderOptions;
 use crate::graphics::{Color, CornerDiameter, ScreenClip, ScreenPosition, ScreenSize, ShadowPadding};
 use crate::input::{InputEvent, MouseInputMode};
 use crate::interface::windows::{
-    ChatWindowState, CinematicDialogWindowState, DialogWindowState, FriendListWindowState, LoginWindowState, LoginWindowStatePathExt,
-    SkillTreeWindowState, WindowCache, WindowClass,
+    ChatWindowState, CinematicDialogWindowState, DialogWindowState, FriendListWindowState, InventoryWindowState, LoginWindowState,
+    LoginWindowStatePathExt, SkillTreeWindowState, WindowCache, WindowClass,
 };
 #[cfg(feature = "debug")]
 use crate::interface::windows::{ProfilerWindowState, ThemeInspectorWindowState};
@@ -143,6 +143,8 @@ pub struct ClientState {
     cinematic_dialog_window: CinematicDialogWindowState,
     /// Internal state of the skill tree window.
     skill_tree_window: SkillTreeWindowState,
+    /// Internal state of the inventory window.
+    inventory_window: InventoryWindowState,
 
     /// All entities on the map.
     entities: Vec<Entity>,
@@ -333,6 +335,7 @@ impl ClientState {
             let player_name = String::new();
             let hotbar = Hotbar::default();
             let inventory = Inventory::default();
+            let inventory_window = InventoryWindowState::default();
             let skill_tree = SkillTree::default();
             let skill_tree_window = SkillTreeWindowState::default();
         });
@@ -391,6 +394,7 @@ impl ClientState {
             dialog_window,
             cinematic_dialog_window,
             skill_tree_window,
+            inventory_window,
             entities: Vec::new(),
             dead_entities: Vec::new(),
             ground_items: Vec::new(),

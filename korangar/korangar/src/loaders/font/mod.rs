@@ -500,3 +500,44 @@ impl TextLayouter<ClientState> for Arc<FontLoader> {
         (size, font_size)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn load_test_font(font_system: &mut FontSystem, path: &str) -> Vec<ID> {
+        let data = std::fs::read(path).unwrap();
+        Vec::from_iter(font_system.db_mut().load_font_source(fontdb::Source::Binary(Arc::new(data))))
+    }
+
+    fn layout_font_ids(font_system: &mut FontSystem, primary_font_family: &str, text: &str) -> Vec<ID> {
+        let metrics = Metrics::relative(16.0, 1.0);
+        let attributes = Attrs::new().family(Family::Name(primary_font_family));
+        let mut buffer = Buffer::new(font_system, metrics);
+
+        buffer.set_rich_text(font_system, [(text, attributes.clone())], &attributes, Shaping::Advanced, None);
+
+        buffer
+            .layout_runs()
+            .flat_map(|run| run.glyphs.iter().map(|glyph| glyph.font_id))
+            .collect()
+    }
+
+    #[test]
+    fn korean_fallback_keeps_latin_on_primary_font() {
+        let mut font_system = FontSystem::new_with_locale_and_db("en-US".to_owned(), fontdb::Database::new());
+        let primary_ids = load_test_font(&mut font_system, "archive/data/font/NotoSans.ttf");
+        let fallback_ids = load_test_font(&mut font_system, "archive/data/font/NotoSansKR.ttf");
+        let primary_font_family = font_system
+            .db()
+            .face(primary_ids[0])
+            .and_then(|face| face.families.first().map(|(family, _)| family.clone()))
+            .unwrap();
+
+        let latin_font_ids = layout_font_ids(&mut font_system, &primary_font_family, "Korangar ABC 123");
+        let korean_font_ids = layout_font_ids(&mut font_system, &primary_font_family, "안녕하세요");
+
+        assert!(latin_font_ids.iter().all(|font_id| primary_ids.contains(font_id)));
+        assert!(korean_font_ids.iter().any(|font_id| fallback_ids.contains(font_id)));
+    }
+}

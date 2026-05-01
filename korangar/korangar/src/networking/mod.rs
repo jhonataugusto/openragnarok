@@ -20,6 +20,7 @@ use crate::client_state;
 use crate::state::{ClientState, ClientStatePathExt};
 
 const PACKET_TRACE_FILE: &str = "packet-trace.log";
+const MIN_PACKET_ASCII_STRING_LENGTH: usize = 4;
 
 fn bytes_to_hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02X}")).collect::<Vec<_>>().join(" ")
@@ -40,11 +41,51 @@ fn packet_to_raw_bytes<P: Packet>(packet: &P) -> Vec<u8> {
     }
 }
 
+fn packet_ascii_strings(raw_bytes: &[u8]) -> Vec<String> {
+    let mut strings = Vec::new();
+    let mut current = Vec::new();
+
+    for byte in raw_bytes {
+        if byte.is_ascii_graphic() || *byte == b' ' {
+            current.push(*byte);
+            continue;
+        }
+
+        if current.len() >= MIN_PACKET_ASCII_STRING_LENGTH {
+            strings.push(String::from_utf8_lossy(&current).into_owned());
+        }
+
+        current.clear();
+    }
+
+    if current.len() >= MIN_PACKET_ASCII_STRING_LENGTH {
+        strings.push(String::from_utf8_lossy(&current).into_owned());
+    }
+
+    strings
+}
+
+fn packet_ascii_string_suffix(raw_bytes: &[u8]) -> String {
+    let strings = packet_ascii_strings(raw_bytes);
+
+    if strings.is_empty() {
+        return String::new();
+    }
+
+    let strings = strings
+        .into_iter()
+        .map(|string| format!("\"{}\"", string.escape_default()))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    format!("\tstrings=[{strings}]")
+}
+
 fn append_packet_trace(direction: Direction, status: &str, packet_name: &str, raw_bytes: &[u8]) {
     if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(PACKET_TRACE_FILE) {
         let _ = writeln!(
             file,
-            "{}\t{}\t{}\t{}\tlen={}\t{}\t{}",
+            "{}\t{}\t{}\t{}\tlen={}\t{}\t{}{}",
             log_timestamp(),
             direction.trace_label(),
             status,
@@ -52,6 +93,7 @@ fn append_packet_trace(direction: Direction, status: &str, packet_name: &str, ra
             raw_bytes.len(),
             packet_name,
             bytes_to_hex(raw_bytes),
+            packet_ascii_string_suffix(raw_bytes),
         );
     }
 }
@@ -576,5 +618,42 @@ impl PacketCallback for PacketHistoryCallback {
 
             receiver.entries.push(entry);
         }));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn packet_ascii_strings_extracts_null_terminated_names() {
+        let bytes = [
+            0xFD, 0x09, 0x72, 0x00, 0x05, 0x00, b'T', b'h', b'i', b'e', b'f', b' ', b'B', b'u', b'g', 0x00, 0x00,
+        ];
+
+        assert_eq!(packet_ascii_strings(&bytes), vec!["Thief Bug"]);
+    }
+
+    #[test]
+    fn packet_ascii_strings_ignores_short_binary_noise() {
+        let bytes = [b'O', b'K', 0x00, b'A', b'B', b'C', 0x00, 0x13, 0x01];
+
+        assert!(packet_ascii_strings(&bytes).is_empty());
+    }
+
+    #[test]
+    fn packet_ascii_string_suffix_is_empty_without_strings() {
+        let bytes = [0x88, 0x00, 0x80, 0x84, 0x1E, 0x00, 0xEE, 0x00, 0x06, 0x01];
+
+        assert_eq!(packet_ascii_string_suffix(&bytes), "");
+    }
+
+    #[test]
+    fn packet_ascii_string_suffix_formats_strings_for_trace_log() {
+        let bytes = [
+            b'H', b'o', b'r', b'n', b'e', b't', 0x00, 0xFF, b'T', b'h', b'i', b'e', b'f', b' ', b'B', b'u', b'g',
+        ];
+
+        assert_eq!(packet_ascii_string_suffix(&bytes), "\tstrings=[\"Hornet\", \"Thief Bug\"]");
     }
 }

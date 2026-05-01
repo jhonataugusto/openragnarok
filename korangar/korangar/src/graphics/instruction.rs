@@ -127,9 +127,29 @@ impl FogInstruction {
     }
 }
 
+const SKYBOX_ROTATION_PERIOD_MS: f32 = 1_200_000.0;
+
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct SkyboxInstruction {
     pub enabled: bool,
+    pub rotation_offset: f32,
+}
+
+impl SkyboxInstruction {
+    pub fn new(enabled: bool, rotation_enabled: bool, animation_timer_ms: f32) -> Self {
+        Self {
+            enabled,
+            rotation_offset: skybox_rotation_offset(rotation_enabled, animation_timer_ms),
+        }
+    }
+}
+
+fn skybox_rotation_offset(rotation_enabled: bool, animation_timer_ms: f32) -> f32 {
+    if !rotation_enabled {
+        return 0.0;
+    }
+
+    (animation_timer_ms / SKYBOX_ROTATION_PERIOD_MS).fract()
 }
 
 #[derive(Clone, Debug)]
@@ -420,5 +440,26 @@ mod tests {
         };
 
         assert_eq!(fog.factor_at_distance(300.0), 0.0);
+    }
+
+    #[test]
+    fn skybox_rotation_offset_is_zero_when_disabled() {
+        let skybox = SkyboxInstruction::new(true, false, 300_000.0);
+
+        assert_eq!(skybox.rotation_offset, 0.0);
+    }
+
+    #[test]
+    fn skybox_rotation_offset_advances_slowly() {
+        let skybox = SkyboxInstruction::new(true, true, 150_000.0);
+
+        assert_eq!(skybox.rotation_offset, 0.125);
+    }
+
+    #[test]
+    fn skybox_rotation_offset_wraps_after_full_cycle() {
+        let skybox = SkyboxInstruction::new(true, true, 1_500_000.0);
+
+        assert_eq!(skybox.rotation_offset, 0.25);
     }
 }

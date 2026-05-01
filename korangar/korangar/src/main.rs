@@ -3718,6 +3718,7 @@ impl Client {
             let shadow_method = *self.client_state.follow(client_state().graphics_settings().shadow_method());
             let shadow_detail = *self.client_state.follow(client_state().graphics_settings().shadow_detail());
             let sdsm_enabled = *self.client_state.follow(client_state().graphics_settings().sdsm());
+            let skybox_rotation = *self.client_state.follow(client_state().graphics_settings().skybox_rotation());
 
             let use_sdsm = sdsm_enabled & !self.player_camera.is_rotating_or_zooming_fast();
 
@@ -4411,7 +4412,7 @@ impl Client {
                     sdsm_enabled,
                     fog: default_skybox_fog_instruction(),
                 },
-                skybox: SkyboxInstruction { enabled: true },
+                skybox: SkyboxInstruction::new(true, skybox_rotation, animation_timer_ms),
                 indicator: indicator_instruction,
                 interface: interface_instructions.as_slice(),
                 bottom_layer_rectangles: bottom_layer_instructions.as_slice(),

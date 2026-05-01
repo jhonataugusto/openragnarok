@@ -10,6 +10,10 @@ use crate::graphics::{
     LimitFramerate, Msaa, PresentModeInfo, ScreenSpaceAntiAliasing, ShadowDetail, ShadowMethod, ShadowResolution, Ssaa, TextureSamplerType,
 };
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Clone, Serialize, Deserialize, RustState, StateElement)]
 pub struct GraphicsSettings {
     pub lighting_mode: LightingMode,
@@ -25,6 +29,8 @@ pub struct GraphicsSettings {
     pub shadow_detail: ShadowDetail,
     pub sdsm: bool,
     pub high_quality_interface: bool,
+    #[serde(default = "default_true")]
+    pub skybox_rotation: bool,
 }
 
 impl Default for GraphicsSettings {
@@ -43,6 +49,7 @@ impl Default for GraphicsSettings {
             shadow_detail: ShadowDetail::Medium,
             sdsm: true,
             high_quality_interface: true,
+            skybox_rotation: true,
         }
     }
 }
@@ -161,5 +168,33 @@ impl GraphicsSettingsCapabilities {
     pub fn update(&mut self, supported_msaa: Vec<Msaa>, present_mode_info: PresentModeInfo) {
         self.supported_msaa = supported_msaa;
         self.vsync_setting_disabled = !present_mode_info.supports_mailbox && !present_mode_info.supports_immediate;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_graphics_settings_files_enable_skybox_rotation_by_default() {
+        let data = r#"(
+            lighting_mode: Classic,
+            vsync: true,
+            limit_framerate: Unlimited,
+            triple_buffering: true,
+            texture_filtering: Nearest,
+            msaa: Off,
+            ssaa: Off,
+            screen_space_anti_aliasing: Off,
+            shadow_method: Hard,
+            shadow_resolution: Normal,
+            shadow_detail: Low,
+            sdsm: true,
+            high_quality_interface: true,
+        )"#;
+
+        let settings: GraphicsSettings = ron::from_str(data).unwrap();
+
+        assert!(settings.skybox_rotation);
     }
 }

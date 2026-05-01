@@ -165,6 +165,11 @@ where
                 state: self.settings_path.high_quality_interface(),
                 event: Toggle(self.settings_path.high_quality_interface()),
             },
+            state_button! {
+                text: "Skybox rotation",
+                state: self.settings_path.skybox_rotation(),
+                event: Toggle(self.settings_path.skybox_rotation()),
+            },
         );
 
         window! {

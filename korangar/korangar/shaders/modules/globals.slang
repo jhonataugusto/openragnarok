@@ -23,4 +23,5 @@ public struct GlobalUniforms {
     public var use_sdsm: uint;
     public var fog_color: float4;
     public var fog_parameters: float4;
+    public var skybox_parameters: float4;
 };

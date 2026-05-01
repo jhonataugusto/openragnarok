@@ -76,6 +76,7 @@ func vs_main(uint vertex_index : SV_VulkanVertexID) -> SkyboxVertex {
 
 [[shader("pixel")]]
 func fs_main(input: SkyboxVertex) -> float4 {
-    let color = skybox_texture.Sample(linear_sampler, input.uv).rgb;
+    let rotated_uv = float2(frac(input.uv.x + global_uniforms.skybox_parameters.x), input.uv.y);
+    let color = skybox_texture.Sample(linear_sampler, rotated_uv).rgb;
     return float4(color, 1.0);
 }

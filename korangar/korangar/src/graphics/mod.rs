@@ -110,6 +110,7 @@ pub(crate) struct GlobalUniforms {
     use_sdsm: u32,
     fog_color: [f32; 4],
     fog_parameters: [f32; 4],
+    skybox_parameters: [f32; 4],
 }
 
 #[derive(Copy, Clone, Pod, Zeroable)]
@@ -497,6 +498,7 @@ impl Prepare for GlobalContext {
                 instructions.uniforms.fog.density,
                 instructions.uniforms.fog.enabled as u32 as f32,
             ],
+            skybox_parameters: [instructions.skybox.rotation_offset, 0.0, 0.0, 0.0],
         };
 
         self.directional_light_uniforms = DirectionalLightUniforms {
@@ -1898,7 +1900,9 @@ mod tests {
         assert!(shader.contains("skydome_vertex(vertex_index)"));
         assert!(shader.contains("global_uniforms.view_projection"));
         assert!(shader.contains("global_uniforms.camera_position.xyz + vertex.direction * SKYDOME_RADIUS"));
-        assert!(shader.contains("skybox_texture.Sample(linear_sampler, input.uv)"));
+        assert!(shader.contains("global_uniforms.skybox_parameters.x"));
+        assert!(shader.contains("frac(input.uv.x + global_uniforms.skybox_parameters.x)"));
+        assert!(!include_str!("../../shaders/modules/globals.slang").contains("uint3"));
         assert!(drawer.contains("pass.draw(0..SKYDOME_VERTEX_COUNT, 0..1)"));
         assert!(!shader.contains("corner_index == 0 || corner_index == 3 || corner_index == 5"));
         assert!(!shader.contains("FullscreenVertex.new"));

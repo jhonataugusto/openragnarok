@@ -3729,6 +3729,7 @@ pub struct EquipAmmunitionPacket {
 
 #[derive(Debug, Clone, ByteConvertable)]
 #[cfg_attr(feature = "interface", derive(rust_state::RustState, korangar_interface::element::StateElement))]
+#[numeric_type(u16)]
 pub enum AmmunitionActionType {
     EquipProperAmmunitionFirst,
     WeightLimitExceeded1,
@@ -4449,6 +4450,21 @@ pub struct BuyShopItemsResultPacket {
 #[cfg_attr(feature = "interface", derive(rust_state::RustState, korangar_interface::element::StateElement))]
 #[header(0x09D4)]
 pub struct CloseShopPacket {}
+
+#[cfg(test)]
+mod tests {
+    use ragnarok_bytes::ByteReader;
+
+    use super::*;
+
+    #[test]
+    fn ammunition_action_packet_consumes_two_byte_action_type() {
+        let mut byte_reader = ByteReader::without_metadata(&[0x3B, 0x01, 0x00, 0x00]);
+        let _packet = AmmunitionActionPacket::packet_from_bytes(&mut byte_reader).unwrap();
+
+        assert_eq!(byte_reader.get_offset(), 4);
+    }
+}
 
 #[derive(Debug, Clone, FixedByteSize, ByteConvertable)]
 #[cfg_attr(feature = "interface", derive(rust_state::RustState, korangar_interface::element::StateElement))]

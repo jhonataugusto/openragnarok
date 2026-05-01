@@ -209,6 +209,10 @@ pub enum NetworkEvent {
         changed_position: EquipPosition,
         view_id: u16,
     },
+    ClearEquippedAmmunition,
+    ClearEquippedAmmunitionItem {
+        index: InventoryIndex,
+    },
     ChangeJob {
         account_id: AccountId,
         job_id: JobId,

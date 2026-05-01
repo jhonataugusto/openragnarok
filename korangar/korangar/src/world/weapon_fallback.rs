@@ -148,7 +148,7 @@ impl WeaponFallbackKind {
             Self::Bow => WeaponFallback {
                 sprite_name: "\u{d65c}",
                 hit_sound_path: "_hit_arrow.wav",
-                attack_action: WeaponAttackAction::Attack3,
+                attack_action: WeaponAttackAction::Attack2,
             },
             Self::Dagger => WeaponFallback {
                 sprite_name: "\u{b2e8}\u{ac80}",

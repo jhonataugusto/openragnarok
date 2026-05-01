@@ -43,13 +43,22 @@ pub fn inventory_item_activation<Meta>(item: &InventoryItem<Meta>) -> Option<Inv
             }),
             false => Some(InventoryItemActivation::Unequip { index: item.index }),
         },
-        InventoryItemDetails::Regular { equipped_position, .. } if item.item_type == ITEM_TYPE_AMMO => match equipped_position.is_empty() {
-            true => Some(InventoryItemActivation::Equip {
-                index: item.index,
-                position: EquipPosition::AMMO,
-            }),
-            false => Some(InventoryItemActivation::Unequip { index: item.index }),
-        },
+        InventoryItemDetails::Regular { equipped_position, .. }
+            if !equipped_position.is_empty() && equipped_position.intersects(EquipPosition::AMMO) =>
+        {
+            Some(InventoryItemActivation::Unequip { index: item.index })
+        }
+        InventoryItemDetails::Regular { equipped_position, .. }
+            if item.item_type == ITEM_TYPE_AMMO || is_known_ammunition_item(item.item_id.0) =>
+        {
+            match equipped_position.is_empty() {
+                true => Some(InventoryItemActivation::Equip {
+                    index: item.index,
+                    position: EquipPosition::AMMO,
+                }),
+                false => Some(InventoryItemActivation::Unequip { index: item.index }),
+            }
+        }
         InventoryItemDetails::Regular { .. }
             if matches!(item.item_type, ITEM_TYPE_HEALING | ITEM_TYPE_USABLE | ITEM_TYPE_DELAY_CONSUME) =>
         {
@@ -57,6 +66,16 @@ pub fn inventory_item_activation<Meta>(item: &InventoryItem<Meta>) -> Option<Inv
         }
         InventoryItemDetails::Regular { .. } => None,
     }
+}
+
+fn is_known_ammunition_item(item_id: u32) -> bool {
+    matches!(
+        item_id,
+        // Arrows.
+        1750..=1776
+            // Bullets, shells, spheres and other Gunslinger ammunition.
+            | 13200..=13250
+    )
 }
 
 /// An event triggered by the user through mouse or keyboard input.
@@ -402,10 +421,19 @@ mod tests {
         item_type: u8,
         equipped_position: EquipPosition,
     ) -> korangar_networking::InventoryItem<ResourceMetadata> {
+        regular_item_with_id(index, ItemId(1), item_type, equipped_position)
+    }
+
+    fn regular_item_with_id(
+        index: InventoryIndex,
+        item_id: ItemId,
+        item_type: u8,
+        equipped_position: EquipPosition,
+    ) -> korangar_networking::InventoryItem<ResourceMetadata> {
         korangar_networking::InventoryItem {
             metadata: test_metadata(),
             index,
-            item_id: ItemId(1),
+            item_id,
             item_type,
             slot: [0; 4],
             hire_expiration_date: 0,
@@ -480,6 +508,29 @@ mod tests {
                 index: InventoryIndex(9),
                 position: EquipPosition::AMMO,
             })
+        );
+    }
+
+    #[test]
+    fn inventory_item_activation_equips_known_arrow_even_with_unexpected_item_type() {
+        let item = regular_item_with_id(InventoryIndex(9), ItemId(1750), 0, EquipPosition::NONE);
+
+        assert_eq!(
+            inventory_item_activation(&item),
+            Some(InventoryItemActivation::Equip {
+                index: InventoryIndex(9),
+                position: EquipPosition::AMMO,
+            })
+        );
+    }
+
+    #[test]
+    fn inventory_item_activation_unequips_equipped_ammunition_even_with_unexpected_item_type() {
+        let item = regular_item_with_id(InventoryIndex(9), ItemId(1750), 0, EquipPosition::AMMO);
+
+        assert_eq!(
+            inventory_item_activation(&item),
+            Some(InventoryItemActivation::Unequip { index: InventoryIndex(9) })
         );
     }
 

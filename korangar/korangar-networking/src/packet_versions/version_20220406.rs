@@ -47,6 +47,22 @@ fn display_skill_effect_and_damage_packet_to_event(packet: DisplaySkillEffectAnd
     }
 }
 
+fn equip_ammunition_packet_to_event(packet: EquipAmmunitionPacket) -> NetworkEvent {
+    NetworkEvent::UpdateEquippedPosition {
+        index: packet.inventory_index,
+        equipped_position: EquipPosition::AMMO,
+        changed_position: EquipPosition::AMMO,
+        view_id: 0,
+    }
+}
+
+fn ammunition_action_packet_to_event(packet: AmmunitionActionPacket) -> Option<NetworkEvent> {
+    match packet.action_type {
+        AmmunitionActionType::EquipProperAmmunitionFirst => Some(NetworkEvent::ClearEquippedAmmunition),
+        _ => None,
+    }
+}
+
 pub fn register_login_server_packets<Callback>(
     packet_handler: &mut PacketHandler<NetworkEventList, Callback>,
 ) -> Result<(), DuplicateHandlerError>
@@ -124,6 +140,37 @@ mod tests {
     #[test]
     fn uses_modern_skill_ack_packet_header() {
         assert_eq!(UseSkillSuccessPacket::HEADER, PacketHeader(0x0B1A));
+    }
+
+    #[test]
+    fn equip_ammunition_packet_marks_ammo_position() {
+        let event = equip_ammunition_packet_to_event(EquipAmmunitionPacket {
+            inventory_index: InventoryIndex(9),
+        });
+
+        let NetworkEvent::UpdateEquippedPosition {
+            index,
+            equipped_position,
+            changed_position,
+            view_id,
+        } = event
+        else {
+            panic!("expected equipped position update");
+        };
+
+        assert_eq!(index, InventoryIndex(9));
+        assert_eq!(equipped_position, EquipPosition::AMMO);
+        assert_eq!(changed_position, EquipPosition::AMMO);
+        assert_eq!(view_id, 0);
+    }
+
+    #[test]
+    fn proper_ammunition_failure_clears_stale_ammo_state() {
+        let event = ammunition_action_packet_to_event(AmmunitionActionPacket {
+            action_type: AmmunitionActionType::EquipProperAmmunitionFirst,
+        });
+
+        assert!(matches!(event, Some(NetworkEvent::ClearEquippedAmmunition)));
     }
 
     #[test]
@@ -856,6 +903,9 @@ where
             changed_position: packet.equipped_position,
             view_id: 0,
         }),
+        RequestUnequipItemStatus::Failed if packet.equipped_position.is_empty() => Some(NetworkEvent::ClearEquippedAmmunitionItem {
+            index: packet.inventory_index,
+        }),
         _ => None,
     })?;
     packet_handler.register_noop::<Packet8302>()?;
@@ -963,8 +1013,8 @@ where
     packet_handler.register(|packet: SellListPacket| NetworkEvent::SellItemList { items: packet.items })?;
     packet_handler.register(|packet: SellItemsResultPacket| NetworkEvent::SellingCompleted { result: packet.result })?;
     packet_handler.register_noop::<RequestStatUpResponsePacket>()?;
-    packet_handler.register_noop::<EquipAmmunitionPacket>()?;
-    packet_handler.register_noop::<AmmunitionActionPacket>()?;
+    packet_handler.register(equip_ammunition_packet_to_event)?;
+    packet_handler.register(ammunition_action_packet_to_event)?;
     packet_handler.register(|packet: UpdateSkillPacket| {
         let UpdateSkillPacket {
             skill_id,

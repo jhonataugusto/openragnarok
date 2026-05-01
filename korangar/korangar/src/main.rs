@@ -2195,7 +2195,12 @@ impl Client {
                         .push(ChatMessage::new(message, MessageColor::Information));
                 }
                 NetworkEvent::InventoryItemRemoved { index, amount, .. } => {
-                    self.client_state.follow_mut(client_state().inventory()).remove_item(index, amount);
+                    let removal = self.client_state.follow_mut(client_state().inventory()).remove_item(index, amount);
+                    if matches!(removal, state::inventory::InventoryItemRemoval::Removed {
+                        was_equipped_ammunition: true
+                    }) {
+                        *self.client_state.follow_mut(client_state().buffered_action()) = None;
+                    }
                 }
                 NetworkEvent::SkillTree { skill_information } => {
                     *self.client_state.follow_mut(client_state().skill_tree().skills()) =
@@ -2229,6 +2234,23 @@ impl Client {
                             entity.set_shield(visual_id);
                         }
 
+                        #[cfg(feature = "debug")]
+                        {
+                            let part_files = entity.get_entity_part_files(&self.library);
+                            print_debug!(
+                                "[equip-visual] index={} equipped_position={} changed_position={} server_view_id={} fallback_item_id={:?} \
+                                 visual_id={} weapon_sprite_name={:?} part_files={:?}",
+                                index.0,
+                                equipped_position.bits(),
+                                changed_position.bits(),
+                                view_id,
+                                fallback_visual_item_id,
+                                visual_id,
+                                self.library.weapon_sprite_name(visual_id),
+                                part_files,
+                            );
+                        }
+
                         if let Some(animation_data) = self.async_loader.request_animation_data_load(
                             entity.get_entity_id(),
                             entity.get_entity_type(),
@@ -2237,6 +2259,16 @@ impl Client {
                             entity.set_animation_data(animation_data);
                         }
                     }
+                }
+                NetworkEvent::ClearEquippedAmmunition => {
+                    self.client_state.follow_mut(client_state().inventory()).clear_equipped_ammunition();
+                    *self.client_state.follow_mut(client_state().buffered_action()) = None;
+                }
+                NetworkEvent::ClearEquippedAmmunitionItem { index } => {
+                    self.client_state
+                        .follow_mut(client_state().inventory())
+                        .clear_equipped_ammunition_item(index);
+                    *self.client_state.follow_mut(client_state().buffered_action()) = None;
                 }
                 NetworkEvent::ChangeJob { account_id, job_id } => {
                     let layout = self.async_loader.request_skill_tree_layout_load(job_id, client_tick);

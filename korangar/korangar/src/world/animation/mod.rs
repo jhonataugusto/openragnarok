@@ -135,6 +135,16 @@ mod tests {
     }
 
     #[test]
+    fn bow_player_attack_uses_short_weapon_action() {
+        let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
+
+        animation_state.attack(EntityType::Player, 1701, 150, false, ClientTick(10));
+
+        assert_eq!(animation_state.action_type, AnimationActionType::Attack2);
+        assert_eq!(animation_state.action_base_offset, 10);
+    }
+
+    #[test]
     fn unarmed_player_attack_uses_unarmed_action() {
         let mut animation_state = AnimationState::new(EntityType::Player, ClientTick(0));
 

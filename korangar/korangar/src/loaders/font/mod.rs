@@ -89,6 +89,10 @@ impl Scaling {
     pub fn get_factor(&self) -> f32 {
         self.0
     }
+
+    pub fn scaled_by(self, factor: f32) -> Self {
+        Self(self.0 * factor)
+    }
 }
 
 impl DropDownItem<Scaling> for Scaling {

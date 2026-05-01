@@ -133,6 +133,12 @@ const DEFAULT_BACKGROUND_MUSIC: Option<&str> = Some("bgm\\01.mp3");
 const MAIN_MENU_CLICK_SOUND_EFFECT: &str = "버튼소리.wav";
 const CINEMATIC_DIALOG_TEXT_SOUND_EFFECT: &str = MAIN_MENU_CLICK_SOUND_EFFECT;
 const COMBAT_HIT_SOUND_RANGE: f32 = 250.0;
+const REFERENCE_INTERFACE_SIZE: ScreenSize = ScreenSize {
+    width: 1920.0,
+    height: 1080.0,
+};
+const MIN_AUTOMATIC_INTERFACE_SCALING: f32 = 0.75;
+const MAX_AUTOMATIC_INTERFACE_SCALING: f32 = 1.35;
 const ITEM_PICKUP_RANGE: AttackRange = AttackRange(1);
 const THIRD_PERSON_TAP_TILE_DISTANCE: i16 = 1;
 const THIRD_PERSON_HOLD_TILE_DISTANCE: i16 = 4;
@@ -153,6 +159,23 @@ const FALLBACK_PACKET_VERSION: SupportedPacketVersion = SupportedPacketVersion::
 
 const fn default_skybox_fog_instruction() -> FogInstruction {
     FogInstruction::disabled()
+}
+
+fn automatic_interface_scaling(screen_size: ScreenSize) -> f32 {
+    if screen_size.width <= 0.0 || screen_size.height <= 0.0 {
+        return 1.0;
+    }
+
+    let width_scaling = screen_size.width / REFERENCE_INTERFACE_SIZE.width;
+    let height_scaling = screen_size.height / REFERENCE_INTERFACE_SIZE.height;
+
+    width_scaling
+        .min(height_scaling)
+        .clamp(MIN_AUTOMATIC_INTERFACE_SCALING, MAX_AUTOMATIC_INTERFACE_SCALING)
+}
+
+fn effective_interface_scaling(manual_scaling: Scaling, screen_size: ScreenSize) -> Scaling {
+    manual_scaling.scaled_by(automatic_interface_scaling(screen_size))
 }
 
 static ICON_DATA: &[u8] = include_bytes!("../archive/data/icon.png");
@@ -457,8 +480,8 @@ mod third_person_movement_tests {
     use ragnarok_packets::{ClientTick, TilePosition};
 
     use super::{
-        THIRD_PERSON_HOLD_TILE_DISTANCE, THIRD_PERSON_TAP_TILE_DISTANCE, ThirdPersonMovementState, default_skybox_fog_instruction,
-        equipped_item_visual_id,
+        Scaling, ScreenSize, THIRD_PERSON_HOLD_TILE_DISTANCE, THIRD_PERSON_TAP_TILE_DISTANCE, ThirdPersonMovementState,
+        automatic_interface_scaling, default_skybox_fog_instruction, effective_interface_scaling, equipped_item_visual_id,
     };
 
     #[test]
@@ -467,6 +490,45 @@ mod third_person_movement_tests {
 
         assert!(!fog.enabled);
         assert_eq!(fog.density, 0.0);
+    }
+
+    #[test]
+    fn automatic_interface_scaling_uses_reference_resolution_as_one() {
+        assert_eq!(
+            automatic_interface_scaling(ScreenSize {
+                width: 1920.0,
+                height: 1080.0,
+            }),
+            1.0
+        );
+    }
+
+    #[test]
+    fn automatic_interface_scaling_clamps_small_and_large_resolutions() {
+        assert_eq!(
+            automatic_interface_scaling(ScreenSize {
+                width: 800.0,
+                height: 600.0,
+            }),
+            0.75
+        );
+        assert_eq!(
+            automatic_interface_scaling(ScreenSize {
+                width: 3840.0,
+                height: 2160.0,
+            }),
+            1.35
+        );
+    }
+
+    #[test]
+    fn effective_interface_scaling_combines_manual_and_automatic_scaling() {
+        let scaling = effective_interface_scaling(Scaling::new(1.2), ScreenSize {
+            width: 2560.0,
+            height: 1440.0,
+        });
+
+        assert!((scaling.get_factor() - 1.6).abs() < 0.0001);
     }
 
     #[test]
@@ -1199,7 +1261,9 @@ impl Client {
 
         // TODO: Shouldn't this happen later? After the scaling has been potentially
         // changed by the UI.
-        let scaling = *self.client_state.follow(client_state().interface_settings().scaling());
+        let screen_size: ScreenSize = self.graphics_engine.get_window_size().into();
+        let manual_scaling = *self.client_state.follow(client_state().interface_settings().scaling());
+        let scaling = effective_interface_scaling(manual_scaling, screen_size);
         self.bottom_interface_renderer.update_scaling(scaling);
         self.middle_interface_renderer.update_scaling(scaling);
         self.top_interface_renderer.update_scaling(scaling);
@@ -4318,7 +4382,7 @@ impl Client {
                         input_report.mouse_position,
                         self.interface.get_mouse_mode().grabbed(),
                         *self.client_state.follow(client_state().world_theme().cursor().color()),
-                        self.client_state.follow(client_state().interface_settings().scaling()).get_factor(),
+                        scaling.get_factor(),
                     );
                 }
             }

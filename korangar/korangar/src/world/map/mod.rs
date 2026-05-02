@@ -292,6 +292,14 @@ fn segment_aabb_intersection_fraction(start: Point3<f32>, end: Point3<f32>, aabb
 }
 
 impl Map {
+    pub fn width(&self) -> u16 {
+        self.width
+    }
+
+    pub fn height(&self) -> u16 {
+        self.height
+    }
+
     fn average_tile_height(tile: &Tile) -> f32 {
         (tile.southwest_corner_height + tile.southeast_corner_height + tile.northwest_corner_height + tile.northeast_corner_height) / 4.0
     }

@@ -40,6 +40,10 @@ pub struct InterfaceSettings {
     pub npc_cinematic_text_sound_enabled: bool,
     #[serde(default = "default_false")]
     pub third_person_movement_enabled: bool,
+    #[serde(default = "default_false")]
+    pub circular_minimap_enabled: bool,
+    #[serde(default = "default_true")]
+    pub circular_minimap_rotate_in_third_person: bool,
 }
 
 impl Default for InterfaceSettings {
@@ -54,6 +58,8 @@ impl Default for InterfaceSettings {
             npc_cinematic_dynamic_camera_enabled: true,
             npc_cinematic_text_sound_enabled: true,
             third_person_movement_enabled: false,
+            circular_minimap_enabled: false,
+            circular_minimap_rotate_in_third_person: true,
         }
     }
 }
@@ -180,5 +186,7 @@ mod tests {
         assert!(settings.npc_cinematic_dynamic_camera_enabled);
         assert!(settings.npc_cinematic_text_sound_enabled);
         assert!(!settings.third_person_movement_enabled);
+        assert!(!settings.circular_minimap_enabled);
+        assert!(settings.circular_minimap_rotate_in_third_person);
     }
 }

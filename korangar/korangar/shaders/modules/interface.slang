@@ -19,6 +19,9 @@ public struct RectangleInstanceData {
     public var screen_size: float2;
     public var texture_position: float2;
     public var texture_size: float2;
+    public var rotation_center: float2;
+    public var rotation_angle_radians: float;
+    public var rotation_enabled: uint;
     public var rectangle_type: uint;
     public var texture_index: int;
 };
@@ -257,8 +260,21 @@ public func rectangle_vertex_shader(
     );
     adjusted_size += shadow_expansion;
 
-    let clip_size = adjusted_size * 2.0;
-    let position = coordinate_space::screen_to_clip_space(instance.screen_position + position_offset) + vertex.xy * clip_size;
+    var vertex_screen_position = instance.screen_position + position_offset + vertex.zw * adjusted_size;
+
+    if (instance.rotation_enabled != 0) {
+        let offset_from_center = vertex_screen_position - instance.rotation_center;
+        let angle_sine = sin(instance.rotation_angle_radians);
+        let angle_cosine = cos(instance.rotation_angle_radians);
+        let rotated_offset = float2(
+            offset_from_center.x * angle_cosine - offset_from_center.y * angle_sine,
+            offset_from_center.x * angle_sine + offset_from_center.y * angle_cosine
+        );
+
+        vertex_screen_position = instance.rotation_center + rotated_offset;
+    }
+
+    let position = coordinate_space::screen_to_clip_space(vertex_screen_position);
 
     var output: RectangleVertexOutput;
     output.position = float4(position, 0.0, 1.0);

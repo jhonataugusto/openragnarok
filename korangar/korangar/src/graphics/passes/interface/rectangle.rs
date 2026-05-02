@@ -17,7 +17,8 @@ use crate::graphics::passes::{
 };
 use crate::graphics::shader_compiler::ShaderCompiler;
 use crate::graphics::{
-    BindlessSupport, Buffer, Capabilities, GlobalContext, InterfaceRectangleInstruction, Prepare, RenderInstruction, Texture,
+    BindlessSupport, Buffer, Capabilities, GlobalContext, InterfaceRectangleInstruction, InterfaceRotation, Prepare, RenderInstruction,
+    Texture,
 };
 
 const DRAWER_NAME: &str = "interface rectangle";
@@ -35,9 +36,18 @@ struct InstanceData {
     screen_size: [f32; 2],
     texture_position: [f32; 2],
     texture_size: [f32; 2],
+    rotation_center: [f32; 2],
+    rotation_angle_radians: f32,
+    rotation_enabled: u32,
     rectangle_type: u32,
     texture_index: i32,
     padding: [f32; 2],
+}
+
+fn rotation_data(rotation: Option<InterfaceRotation>) -> ([f32; 2], f32, u32) {
+    rotation.map_or(([0.0, 0.0], 0.0, 0), |rotation| {
+        (rotation.center.into(), rotation.angle_radians, 1)
+    })
 }
 
 pub(crate) struct InterfaceRectangleDrawer {
@@ -291,6 +301,9 @@ impl Prepare for InterfaceRectangleDrawer {
                             screen_size: (*screen_size).into(),
                             texture_position: [0.0, 0.0],
                             texture_size: [1.0, 1.0],
+                            rotation_center: [0.0, 0.0],
+                            rotation_angle_radians: 0.0,
+                            rotation_enabled: 0,
                             rectangle_type: 0,
                             texture_index: 0,
                             padding: Default::default(),
@@ -328,6 +341,9 @@ impl Prepare for InterfaceRectangleDrawer {
                             screen_size: (*screen_size).into(),
                             texture_position: [0.0, 0.0],
                             texture_size: [1.0, 1.0],
+                            rotation_center: [0.0, 0.0],
+                            rotation_angle_radians: 0.0,
+                            rotation_enabled: 0,
                             rectangle_type,
                             texture_index,
                             padding: Default::default(),
@@ -362,6 +378,9 @@ impl Prepare for InterfaceRectangleDrawer {
                             screen_size: (*screen_size).into(),
                             texture_position: [0.0, 0.0],
                             texture_size: [1.0, 1.0],
+                            rotation_center: [0.0, 0.0],
+                            rotation_angle_radians: 0.0,
+                            rotation_enabled: 0,
                             rectangle_type: 3,
                             texture_index,
                             padding: Default::default(),
@@ -374,7 +393,10 @@ impl Prepare for InterfaceRectangleDrawer {
                         color,
                         texture_position,
                         texture_size,
+                        rotation,
                     } => {
+                        let (rotation_center, rotation_angle_radians, rotation_enabled) = rotation_data(*rotation);
+
                         self.instance_data.push(InstanceData {
                             color: color.components_linear(),
                             corner_diameter: [0.0, 0.0, 0.0, 0.0],
@@ -385,6 +407,9 @@ impl Prepare for InterfaceRectangleDrawer {
                             screen_size: (*screen_size).into(),
                             texture_position: (*texture_position).into(),
                             texture_size: (*texture_size).into(),
+                            rotation_center,
+                            rotation_angle_radians,
+                            rotation_enabled,
                             rectangle_type: 4,
                             texture_index: 0,
                             padding: Default::default(),
@@ -427,6 +452,9 @@ impl Prepare for InterfaceRectangleDrawer {
                             screen_size: (*screen_size).into(),
                             texture_position: [0.0, 0.0],
                             texture_size: [1.0, 1.0],
+                            rotation_center: [0.0, 0.0],
+                            rotation_angle_radians: 0.0,
+                            rotation_enabled: 0,
                             rectangle_type: 0,
                             texture_index: 0,
                             padding: Default::default(),
@@ -454,6 +482,9 @@ impl Prepare for InterfaceRectangleDrawer {
                             screen_size: (*screen_size).into(),
                             texture_position: [0.0, 0.0],
                             texture_size: [1.0, 1.0],
+                            rotation_center: [0.0, 0.0],
+                            rotation_angle_radians: 0.0,
+                            rotation_enabled: 0,
                             rectangle_type,
                             texture_index: 0,
                             padding: Default::default(),
@@ -477,6 +508,9 @@ impl Prepare for InterfaceRectangleDrawer {
                             screen_size: (*screen_size).into(),
                             texture_position: [0.0, 0.0],
                             texture_size: [1.0, 1.0],
+                            rotation_center: [0.0, 0.0],
+                            rotation_angle_radians: 0.0,
+                            rotation_enabled: 0,
                             rectangle_type: 3,
                             texture_index: 0,
                             padding: Default::default(),
@@ -489,7 +523,10 @@ impl Prepare for InterfaceRectangleDrawer {
                         color,
                         texture_position,
                         texture_size,
+                        rotation,
                     } => {
+                        let (rotation_center, rotation_angle_radians, rotation_enabled) = rotation_data(*rotation);
+
                         self.instance_data.push(InstanceData {
                             color: color.components_linear(),
                             corner_diameter: [0.0, 0.0, 0.0, 0.0],
@@ -500,6 +537,9 @@ impl Prepare for InterfaceRectangleDrawer {
                             screen_size: (*screen_size).into(),
                             texture_position: (*texture_position).into(),
                             texture_size: (*texture_size).into(),
+                            rotation_center,
+                            rotation_angle_radians,
+                            rotation_enabled,
                             rectangle_type: 4,
                             texture_index: 0,
                             padding: Default::default(),

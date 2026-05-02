@@ -60,6 +60,7 @@ use korangar_debug::profile_block;
 #[cfg(feature = "debug")]
 use korangar_debug::profiling::Profiler;
 use korangar_interface::Interface;
+use korangar_interface::application::Clip;
 use korangar_interface::layout::MouseButton;
 use korangar_interface::prelude::TextThemePathExt;
 use korangar_interface::window::WindowThemePathExt;
@@ -107,6 +108,9 @@ use winit::window::{Icon, Window, WindowId};
 use crate::graphics::*;
 use crate::input::{InputEvent, InputSystem, tile_offset_for_camera_movement};
 use crate::interface::cursor::{MouseCursor, MouseCursorState};
+use crate::interface::minimap::{
+    CircularMinimapState, build_minimap_instruction, is_inside_minimap, minimap_area, minimap_rotation, should_rotate_minimap,
+};
 use crate::interface::resource::{ItemSource, SkillSource};
 use crate::interface::windows::*;
 use crate::loaders::*;
@@ -337,6 +341,7 @@ struct Client {
     player_camera: PlayerCamera,
     third_person_camera: ThirdPersonCamera,
     third_person_movement: ThirdPersonMovementState,
+    circular_minimap: CircularMinimapState,
     cinematic_camera: CinematicCamera,
     cinematic_camera_active: bool,
     directional_shadow_camera: DirectionalShadowCamera,
@@ -900,6 +905,7 @@ impl Client {
             let player_camera = PlayerCamera::new();
             let third_person_camera = ThirdPersonCamera::new();
             let third_person_movement = ThirdPersonMovementState::default();
+            let circular_minimap = CircularMinimapState::default();
             let cinematic_camera = CinematicCamera::new();
             let cinematic_camera_active = false;
             let mut directional_shadow_camera = DirectionalShadowCamera::new();
@@ -1050,6 +1056,7 @@ impl Client {
             player_camera,
             third_person_camera,
             third_person_movement,
+            circular_minimap,
             cinematic_camera,
             cinematic_camera_active,
             directional_shadow_camera,
@@ -1852,6 +1859,7 @@ impl Client {
                         player.stop_movement();
                     }
 
+                    self.circular_minimap.set_map_name(&map_name);
                     self.async_loader.request_map_load(map_name, Some(position));
                 }
                 NetworkEvent::UpdateClientTick { client_tick, received_at } => {
@@ -2759,6 +2767,9 @@ impl Client {
                             self.player_camera.soft_zoom(zoom_factor);
                         }
                     }
+                }
+                InputEvent::ZoomCircularMinimap { scroll_delta } => {
+                    self.circular_minimap.apply_scroll(scroll_delta);
                 }
                 InputEvent::RotateCamera { rotation } => {
                     if !cinematic_dialog_active {
@@ -4276,7 +4287,16 @@ impl Client {
                     }
 
                     if let Some(delta) = input_report.scroll {
-                        if is_interface_hovered {
+                        let circular_minimap_enabled = *self
+                            .client_state
+                            .follow(client_state().interface_settings().circular_minimap_enabled());
+                        let is_circular_minimap_hovered = circular_minimap_enabled
+                            && is_inside_minimap(minimap_area(screen_size, scaling.get_factor()), input_report.mouse_position);
+
+                        if is_circular_minimap_hovered {
+                            self.input_event_buffer
+                                .push(InputEvent::ZoomCircularMinimap { scroll_delta: delta });
+                        } else if is_interface_hovered {
                             interface_frame.scroll(&self.client_state, delta);
                         } else if !cinematic_dialog_active {
                             #[cfg_attr(feature = "debug", korangar_debug::debug_condition(!render_options.use_debug_camera))]
@@ -4417,6 +4437,110 @@ impl Client {
                 }
             }
 
+            let circular_minimap_enabled = self.show_interface
+                && *self
+                    .client_state
+                    .follow(client_state().interface_settings().circular_minimap_enabled());
+            let circular_minimap_area = minimap_area(screen_size, scaling.get_factor());
+            let minimap_rotation_radians = {
+                let rotation_enabled = *self
+                    .client_state
+                    .follow(client_state().interface_settings().circular_minimap_rotate_in_third_person());
+
+                let third_person_camera_active = use_third_person_camera && !use_cinematic_camera;
+
+                match should_rotate_minimap(rotation_enabled, third_person_camera_active) {
+                    true => minimap_rotation(self.third_person_camera.view_direction()).0,
+                    false => 0.0,
+                }
+            };
+            let minimap_instruction = if circular_minimap_enabled {
+                let player_tile_position = self.client_state.try_follow(this_entity()).map(|player| player.get_tile_position());
+                let minimap_texture = self.circular_minimap.map_texture_path().and_then(|path| {
+                    let texture_file_path = format!("data\\texture\\{path}");
+                    let compressed_texture_file_path = format!("data\\texture\\{}", texture_file_dds_name(path));
+
+                    (self.game_file_loader.file_exists(&texture_file_path)
+                        || self.game_file_loader.file_exists(&compressed_texture_file_path))
+                    .then(|| self.texture_loader.get_or_load(path, ImageType::Color).ok())
+                    .flatten()
+                });
+
+                player_tile_position.zip(minimap_texture).map(|(tile_position, texture)| {
+                    build_minimap_instruction(
+                        texture,
+                        circular_minimap_area,
+                        screen_size,
+                        tile_position,
+                        map.width(),
+                        map.height(),
+                        self.circular_minimap.zoom_tiles(),
+                        minimap_rotation_radians,
+                    )
+                })
+            } else {
+                None
+            };
+
+            if minimap_instruction.is_some() {
+                let interface_scaling = scaling.get_factor();
+                let center = circular_minimap_area.center();
+                let label_radius = circular_minimap_area.radius() - 18.0 * interface_scaling;
+                let label_color = Color::WHITE;
+                let label_highlight_color = Color::rgb_u8(255, 160, 60);
+                let label_font_size = FontSize(12.0 * interface_scaling);
+                let label_available_width = 80.0 * interface_scaling;
+                let (angle_sine, angle_cosine) = minimap_rotation_radians.sin_cos();
+                let north_offset = ScreenPosition {
+                    left: label_radius * angle_sine,
+                    top: -label_radius * angle_cosine,
+                };
+                let north_anchor = ScreenPosition {
+                    left: center.left + north_offset.left,
+                    top: center.top + north_offset.top,
+                };
+
+                let (label_size, label_font_size) = self.interface_renderer.get_text_dimensions(
+                    "N",
+                    label_color,
+                    label_highlight_color,
+                    label_font_size,
+                    label_available_width,
+                    OverflowBehavior::Shrink,
+                );
+                let label_position = ScreenPosition {
+                    left: north_anchor.left - label_size.width * 0.5,
+                    top: north_anchor.top - label_size.height * 0.5,
+                };
+
+                self.interface_renderer.render_text(
+                    "N",
+                    label_position,
+                    label_available_width,
+                    ScreenClip::unbound(),
+                    label_color,
+                    label_highlight_color,
+                    label_font_size,
+                );
+
+                let marker_size = 8.0 * interface_scaling;
+                self.interface_renderer.render_rectangle(
+                    ScreenPosition {
+                        left: center.left - marker_size * 0.5,
+                        top: center.top - marker_size * 0.5,
+                    },
+                    ScreenSize {
+                        width: marker_size,
+                        height: marker_size,
+                    },
+                    ScreenClip::unbound(),
+                    CornerDiameter::uniform(marker_size),
+                    Color::WHITE,
+                    Color::rgba_u8(0, 0, 0, 180),
+                    ShadowPadding::uniform(1.0 * interface_scaling),
+                );
+            }
+
             #[cfg(feature = "debug")]
             collect_instructions_measurement.stop();
 
@@ -4447,6 +4571,7 @@ impl Client {
                 skybox: SkyboxInstruction::new(true, skybox_rotation, animation_timer_ms),
                 indicator: indicator_instruction,
                 interface: interface_instructions.as_slice(),
+                minimap: minimap_instruction.as_ref(),
                 bottom_layer_rectangles: bottom_layer_instructions.as_slice(),
                 middle_layer_rectangles: middle_layer_instructions.as_slice(),
                 top_layer_rectangles: top_layer_instructions.as_slice(),

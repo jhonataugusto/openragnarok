@@ -9,7 +9,7 @@ use korangar_interface::layout::area::Area;
 use korangar_interface::layout::{ClipId, Icon, WindowLayout};
 
 use crate::graphics::{
-    Color, CornerDiameter, InterfaceRectangleInstruction, ScreenClip, ScreenPosition, ScreenSize, ShadowPadding, Texture,
+    Color, CornerDiameter, InterfaceRectangleInstruction, InterfaceRotation, ScreenClip, ScreenPosition, ScreenSize, ShadowPadding, Texture,
 };
 use crate::loaders::{FontLoader, FontSize, GlyphInstruction, ImageType, OverflowBehavior, Sprite, TextureLoader};
 use crate::renderer::SpriteRenderer;
@@ -369,6 +369,7 @@ impl InterfaceRenderer {
                     texture_position,
                     texture_size,
                     color,
+                    rotation: None,
                 });
             },
         );
@@ -378,6 +379,48 @@ impl InterfaceRenderer {
         }
 
         size.y
+    }
+
+    pub fn render_text_rotated(
+        &self,
+        text: &str,
+        text_position: ScreenPosition,
+        available_width: f32,
+        screen_clip: ScreenClip,
+        color: Color,
+        highlight_color: Color,
+        font_size: FontSize,
+        mut rotation: InterfaceRotation,
+    ) -> f32 {
+        let instruction_start = self.instructions.borrow().len();
+        let height = self.render_text(
+            text,
+            text_position,
+            available_width,
+            screen_clip,
+            color,
+            highlight_color,
+            font_size,
+        );
+
+        if self.high_quality_interface {
+            rotation.center = rotation.center * 2.0;
+        }
+
+        rotation.center = rotation.center / self.interface_size;
+
+        self.instructions.borrow_mut()[instruction_start..]
+            .iter_mut()
+            .for_each(|instruction| {
+                if let InterfaceRectangleInstruction::Text {
+                    rotation: text_rotation, ..
+                } = instruction
+                {
+                    *text_rotation = Some(rotation);
+                }
+            });
+
+        height
     }
 
     /// Render a checkbox icon using an SDF.

@@ -21,6 +21,7 @@ pub struct RenderInstruction<'a> {
     pub skybox: SkyboxInstruction,
     pub indicator: Option<IndicatorInstruction>,
     pub interface: &'a [InterfaceRectangleInstruction],
+    pub minimap: Option<&'a MinimapInstruction>,
     /// Between 3D world and effects.
     pub bottom_layer_rectangles: &'a [RectangleInstruction],
     /// Between effects and interface.
@@ -268,6 +269,12 @@ pub enum RectangleInstruction {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InterfaceRotation {
+    pub center: ScreenPosition,
+    pub angle_radians: f32,
+}
+
 #[derive(Clone, Debug)]
 pub enum InterfaceRectangleInstruction {
     Solid {
@@ -303,7 +310,20 @@ pub enum InterfaceRectangleInstruction {
         color: Color,
         texture_position: Vector2<f32>,
         texture_size: Vector2<f32>,
+        rotation: Option<InterfaceRotation>,
     },
+}
+
+#[derive(Clone, Debug)]
+pub struct MinimapInstruction {
+    pub screen_position: ScreenPosition,
+    pub screen_size: ScreenSize,
+    pub player_uv: Vector2<f32>,
+    pub visible_tiles: f32,
+    pub map_size_tiles: Vector2<f32>,
+    pub rotation_radians: f32,
+    pub tint: Color,
+    pub texture: Arc<Texture>,
 }
 
 #[cfg(feature = "debug")]

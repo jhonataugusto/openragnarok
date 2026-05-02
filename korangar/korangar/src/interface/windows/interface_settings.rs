@@ -115,6 +115,16 @@ where
                 state: self.settings_path.third_person_movement_enabled(),
                 event: Toggle(self.settings_path.third_person_movement_enabled()),
             },
+            state_button! {
+                text: "Circular minimap",
+                state: self.settings_path.circular_minimap_enabled(),
+                event: Toggle(self.settings_path.circular_minimap_enabled()),
+            },
+            state_button! {
+                text: "Rotate minimap in third person",
+                state: self.settings_path.circular_minimap_rotate_in_third_person(),
+                event: Toggle(self.settings_path.circular_minimap_rotate_in_third_person()),
+            },
         );
 
         window! {

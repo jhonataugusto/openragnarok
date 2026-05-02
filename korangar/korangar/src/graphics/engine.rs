@@ -88,6 +88,7 @@ struct EngineContext {
     post_processing_pass_context: PostProcessingRenderPassContext,
     screen_blit_pass_context: ScreenBlitRenderPassContext,
 
+    interface_minimap_drawer: InterfaceMinimapDrawer,
     interface_rectangle_drawer: InterfaceRectangleDrawer,
     picker_entity_drawer: PickerEntityDrawer,
     picker_tile_drawer: PickerTileDrawer,
@@ -246,6 +247,14 @@ impl GraphicsEngine {
                     });
 
                     time_phase!("create computer and drawer", {
+                        let interface_minimap_drawer = InterfaceMinimapDrawer::new(
+                            &self.capabilities,
+                            &self.device,
+                            &self.queue,
+                            &self.shader_compiler,
+                            &global_context,
+                            &interface_render_pass_context,
+                        );
                         let interface_rectangle_drawer = InterfaceRectangleDrawer::new(
                             &self.capabilities,
                             &self.device,
@@ -447,6 +456,7 @@ impl GraphicsEngine {
                         sdsm_pass_context: SdsmPassContext {},
                         post_processing_pass_context,
                         screen_blit_pass_context,
+                        interface_minimap_drawer,
                         interface_rectangle_drawer,
                         picker_entity_drawer,
                         picker_tile_drawer,
@@ -973,6 +983,7 @@ impl GraphicsEngine {
                 context.forward_model_drawer.prepare(&self.device, instruction);
             });
             scope.spawn(|_| {
+                context.interface_minimap_drawer.prepare(&self.device, instruction);
                 context.interface_rectangle_drawer.prepare(&self.device, instruction);
                 context.water_wave_drawer.prepare(&self.device, instruction);
             });
@@ -1015,6 +1026,7 @@ impl GraphicsEngine {
         visitor.upload(&mut context.directional_shadow_model_drawer);
         visitor.upload(&mut context.directional_shadow_pass_context);
         visitor.upload(&mut context.global_context);
+        visitor.upload(&mut context.interface_minimap_drawer);
         visitor.upload(&mut context.interface_rectangle_drawer);
         visitor.upload(&mut context.picker_entity_drawer);
         visitor.upload(&mut context.point_shadow_entity_drawer);
@@ -1128,6 +1140,7 @@ impl GraphicsEngine {
                         .interface_render_pass_context
                         .create_pass(&mut interface_encoder, &engine_context.global_context, ());
 
+                engine_context.interface_minimap_drawer.draw(&mut render_pass, instruction.minimap);
                 engine_context
                     .interface_rectangle_drawer
                     .draw(&mut render_pass, instruction.interface);

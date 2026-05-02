@@ -108,6 +108,11 @@ pub enum InputEvent {
         /// Amount to zoom.
         zoom_factor: f32,
     },
+    /// Zoom the circular minimap.
+    ZoomCircularMinimap {
+        /// Scroll amount to apply.
+        scroll_delta: f32,
+    },
     /// Rotate the player camera.
     RotateCamera {
         /// Amount of rotation.

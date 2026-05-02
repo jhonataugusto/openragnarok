@@ -1,5 +1,7 @@
+mod minimap;
 mod rectangle;
 
+pub(crate) use minimap::InterfaceMinimapDrawer;
 pub(crate) use rectangle::InterfaceRectangleDrawer;
 use wgpu::{
     BindGroupLayout, Color, CommandEncoder, Device, LoadOp, Operations, Queue, RenderPass, RenderPassColorAttachment, RenderPassDescriptor,
